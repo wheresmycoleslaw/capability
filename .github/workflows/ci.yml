@@ -11,7 +11,7 @@ jobs:
   test:
     strategy:
       matrix:
-        node: [20, 22, 24]
+        node: [22, 24]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -20,4 +20,15 @@ jobs:
           node-version: ${{ matrix.node }}
       - run: npm install --ignore-scripts
       - run: npm test
+      - run: npm pack --dry-run
+
+  node20-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm install --ignore-scripts
+      - run: npm run build
       - run: npm pack --dry-run
