@@ -1,51 +1,28 @@
 {
   "name": "@wheresmycoleslaw/capability",
-  "version": "0.0.1",
-  "description": "A standard for self-describing executable capabilities for AI agents.",
+  "version": "0.1.0",
+  "description": "A standard and runtime for self-describing executable capabilities for AI agents.",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
-    ".": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.js"
-    }
+    ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js" },
+    "./mcp": { "types": "./dist/mcp.d.ts", "import": "./dist/mcp.js" },
+    "./package": { "types": "./dist/package.d.ts", "import": "./dist/package.js" }
   },
-  "files": [
-    "dist",
-    "README.md",
-    "SPEC.md",
-    "LICENSE"
-  ],
+  "files": ["dist", "README.md", "SPEC.md", "ARCHITECTURE.md", "SECURITY.md", "capability-manifest.schema.json", "CHANGELOG.md", "LICENSE"],
   "sideEffects": false,
   "scripts": {
     "build": "tsc",
-    "test": "npm run build"
+    "test": "npm run build && node --test test/*.test.mjs",
+    "check": "npm test && npm pack --dry-run"
   },
-  "keywords": [
-    "ai",
-    "agents",
-    "capabilities",
-    "tools",
-    "mcp",
-    "automation"
-  ],
+  "keywords": ["ai", "agents", "capabilities", "tools", "mcp", "automation", "permissions", "runtime", "discovery"],
   "license": "MIT",
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/wheresmycoleslaw/capability.git"
-  },
-  "bugs": {
-    "url": "https://github.com/wheresmycoleslaw/capability/issues"
-  },
+  "repository": { "type": "git", "url": "git+https://github.com/wheresmycoleslaw/capability.git" },
+  "bugs": { "url": "https://github.com/wheresmycoleslaw/capability/issues" },
   "homepage": "https://github.com/wheresmycoleslaw/capability#readme",
-  "publishConfig": {
-    "access": "public"
-  },
-  "engines": {
-    "node": ">=20"
-  },
-  "devDependencies": {
-    "typescript": "^5.8.3"
-  }
+  "publishConfig": { "access": "public" },
+  "engines": { "node": ">=20" },
+  "devDependencies": { "typescript": "^5.8.3", "@types/node": "^22.0.0" }
 }

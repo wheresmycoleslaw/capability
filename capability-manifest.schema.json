@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/wheresmycoleslaw/capability/blob/main/capability-manifest.schema.json",
+  "title": "Capability Manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["specVersion", "id", "version", "name", "description"],
+  "properties": {
+    "specVersion": { "const": "0.1" },
+    "id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9._-]*(/[a-z0-9][a-z0-9._-]*)+$" },
+    "version": { "type": "string", "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)(?:-[0-9A-Za-z.-]+)?(?:\\+[0-9A-Za-z.-]+)?$" },
+    "name": { "type": "string", "minLength": 1 },
+    "description": { "type": "string", "minLength": 1 },
+    "input": { "type": "object" },
+    "output": { "type": "object" },
+    "effects": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "anyOf": [
+          { "enum": ["filesystem.read", "filesystem.write", "network.connect", "process.spawn", "environment.read", "secrets.read", "database.read", "database.write", "email.send", "git.commit", "git.push"] },
+          { "type": "string", "pattern": "^custom:[a-z0-9][a-z0-9._/-]*$" }
+        ]
+      }
+    },
+    "behavior": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "deterministic": { "type": "boolean" },
+        "idempotent": { "type": "boolean" },
+        "reversible": { "type": "boolean" }
+      }
+    },
+    "tags": { "type": "array", "uniqueItems": true, "items": { "type": "string", "minLength": 1 } },
+    "metadata": { "type": "object" }
+  }
+}
