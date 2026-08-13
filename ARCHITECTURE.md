@@ -10,7 +10,7 @@ Capability is intentionally split into layers so no single agent framework, mode
                     package declaration
                              |
                   +----------v-----------+
-                  |     acquisition      |
+                  | acquisition / loader |
                   +----------+-----------+
                              |
             +----------------v----------------+
@@ -44,11 +44,9 @@ Capability is intentionally split into layers so no single agent framework, mode
 
 `DiscoveryRanker` is an interface. The built-in registry has lexical search and `EmbeddingRanker` makes semantic search pluggable.
 
-`CapabilityCatalog` indexes inert package manifests before executable modules are acquired.
-
 ## Transport adapters
 
-MCP is an adapter, not the core object model. That keeps Capability usable by MCP clients, direct TypeScript applications, job runners, and future protocols.
+MCP is an adapter, not the core object model. That keeps Capability usable by MCP clients, direct TypeScript applications, CLIs, job runners, and future protocols.
 
 ## Execution boundaries
 
@@ -57,3 +55,17 @@ The in-process runtime enforces policy before invoking code but cannot stop inte
 ## Why package metadata matters
 
 A package's `capability.exports` declaration is deliberately separate from executable modules. A registry can index package metadata, capability IDs, and versions before deciding whether code should ever be acquired or loaded.
+
+## Index and installation layer
+
+`PublicCapabilityIndex` is deliberately static-data-first: search can happen over inert manifests without package installation or code import. Index documents can be fetched, cached and merged.
+
+`CapabilityPackageInstaller` separates acquisition mechanics from npm. `NpmPackageInstaller` is the reference implementation and installs exact versions with lifecycle scripts disabled. `acquireIndexedCapability()` connects index discovery to installation, package manifest verification and trust assessment.
+
+## Evaluation and trust layer
+
+The eval harness runs through `CapabilityRuntime` instead of bypassing it, preserving policy and receipts. Trust assessment consumes observed provenance and explicit host policy; it is not embedded in capability code.
+
+## Protocol importers
+
+Protocol adapters are edges, not the core. MCP projects capabilities outward as tools. OpenAPI imports existing HTTP operations inward as capabilities. Both meet at the same manifest/runtime boundary.

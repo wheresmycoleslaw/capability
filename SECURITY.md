@@ -32,8 +32,8 @@ Receipts may contain input and output values. Applications handling secrets or r
 
 Important limitations:
 
-- Node's Permission Model is defense-in-depth, not a hostile-code security boundary.
-- Node 24 cannot restrict network access using the Permission Model; newer Node releases can add network permission controls.
+- Node describes its Permission Model as defense-in-depth for trusted code, not protection from malicious code.
+- Node 24 cannot restrict network access using the Permission Model. Node 25+ adds network permissions.
 - database clients, native extensions, OS syscalls, and non-Node executables can require stronger isolation.
 - allowing child processes materially weakens the boundary.
 
@@ -42,3 +42,17 @@ Use containers, VMs, OS sandboxing, WASM, or remote workers for hostile/untruste
 ## Reporting vulnerabilities
 
 Open a private GitHub security advisory for vulnerabilities. Do not publish exploit details in a public issue before a fix is available.
+
+## Package installation
+
+`NpmPackageInstaller` invokes npm with `--ignore-scripts`, `--no-save`, no lockfile, audit disabled and an exact package version. Disabling lifecycle scripts reduces acquisition-time execution but does **not** make package contents trusted. Capability modules execute later and remain subject to runtime policy and the selected execution boundary.
+
+Public index documents are untrusted discovery metadata. Treat package names, URLs, manifests, integrity strings and provenance claims as inputs to verification, not authority.
+
+## Trust scores
+
+The built-in trust score is deterministic policy assistance, not a signature verifier. An attestation reference only increases the score because its presence was observed; hosts requiring cryptographic assurance MUST verify the attestation with the issuing ecosystem and attach only verified provenance.
+
+## OpenAPI imports
+
+OpenAPI documents can point at arbitrary servers. Imported operations always declare `network.connect`, but hosts SHOULD also restrict allowed destinations at the network/sandbox layer and SHOULD treat OpenAPI descriptions and schemas as untrusted metadata.

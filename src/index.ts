@@ -16,3 +16,8 @@ export * from "./acquire.js";
 export * from "./sandbox.js";
 export * from "./executor.js";
 export * from "./catalog.js";
+export * from "./evals.js";
+export * from "./trust.js";
+export * from "./public-index.js";
+export * from "./openapi.js";
+export * from "./installer.js";

@@ -2,10 +2,12 @@
 
 **Executable abilities for agents, with inspection and authorization before execution.**
 
-`@wheresmycoleslaw/capability` is an experimental standard and TypeScript runtime for packaging software as self-describing capabilities that agents can discover, inspect, plan, authorize, execute, verify, audit, compose, and optionally roll back.
+`@wheresmycoleslaw/capability` is an experimental standard and TypeScript runtime for packaging software as self-describing capabilities that agents can discover, inspect, plan, authorize, execute, verify, audit, compose, and roll back.
 
 ```text
 DISCOVER -> INSPECT -> PLAN -> AUTHORIZE -> EXECUTE -> VERIFY -> RECEIPT
+                                                        |
+                                                        +-> ROLLBACK
 ```
 
 ## Install
@@ -42,29 +44,22 @@ export default defineCapability({
     behavior: { deterministic: true, idempotent: true, reversible: false },
     tags: ["math"]
   },
-  execute({ a, b }) {
-    return { result: a + b };
-  }
+  execute({ a, b }) { return { result: a + b }; }
 });
 ```
 
 ## Runtime
 
 ```ts
-import { CapabilityRuntime, permissivePolicy } from "@wheresmycoleslaw/capability";
-import add from "./add.js";
-
 const runtime = new CapabilityRuntime({ policy: permissivePolicy }).register(add);
 const plan = await runtime.plan("math/add", { a: 20, b: 22 });
 const decision = runtime.authorize(plan);
 const receipt = await runtime.execute(plan);
 ```
 
-The default runtime denies declared effects unless a policy permits them. `permissivePolicy` allows declared effects but requires explicit approval for mutating/open-world effects.
+The default runtime denies declared effects unless a policy permits them. Mutating/open-world effects require explicit approval under `permissivePolicy`.
 
 ## Effects
-
-Built-in vocabulary:
 
 ```text
 filesystem.read      filesystem.write
@@ -77,58 +72,71 @@ git.push
 
 Custom effects use `custom:<namespace>`.
 
-## Discovery before acquisition
+## Discovery and acquisition
 
-npm packages can expose inert capability manifests through a `capability` field in `package.json`. `CapabilityCatalog` indexes those manifests without importing executable modules.
+`CapabilityRegistry` provides local lexical discovery. `EmbeddingRanker` makes semantic ranking pluggable without coupling core to a model vendor.
 
-```ts
-const catalog = new CapabilityCatalog();
-await catalog.indexPackage("./node_modules/@example/image-tools/package.json");
-const [match] = catalog.discover("resize an image locally");
-const capability = await catalog.acquire(match.manifest.id);
-```
-
-The intended acquisition path is:
+Packages can advertise inert capability manifests through `package.json.capability`. `CapabilityCatalog` can index those manifests before importing executable modules.
 
 ```text
 INDEX METADATA -> DISCOVER -> ACQUIRE -> PLAN -> AUTHORIZE -> EXECUTE -> VERIFY -> RECEIPT
 ```
 
-Package acquisition checks that the loaded module's manifest matches the inert manifest advertised by package metadata and can optionally verify SHA-256 integrity.
+`PublicCapabilityIndex` adds a static, mergeable JSON index format for discovery across packages. `fetchCapabilityIndex()` retrieves an index, and `acquireIndexedCapability()` installs an exact package version through a pluggable installer, verifies package metadata, attaches provenance, and applies trust policy.
 
-## Discovery
+## Trust and provenance
 
-`CapabilityRegistry` provides lexical discovery. `EmbeddingRanker` allows vendor-neutral semantic ranking with a caller-supplied embedding function.
+`assessCapabilityTrust()` produces a deterministic policy score from observed package identity, integrity, repository, commit, and attestation metadata. Trust scoring is policy input, not cryptographic proof.
+
+## Automated evaluations
+
+`runCapabilityEvals()` executes repeatable cases through the real runtime, preserving policy, validation, verification, and receipts. `evaluateDeterminism()` replays the same input and compares output hashes.
+
+## OpenAPI
+
+`capabilitiesFromOpenApi()` projects OpenAPI 3.1 operations into capabilities. Imported operations declare `network.connect` and use synthesized input/output schemas.
 
 ## MCP
 
-`createMcpAdapter(runtime)` projects registered capabilities into MCP-style tool descriptors and routes tool calls through the Capability runtime so policy remains the authorization layer.
-
-```ts
-import { createMcpAdapter } from "@wheresmycoleslaw/capability/mcp";
-const mcp = createMcpAdapter(runtime);
-const tools = mcp.listTools();
-```
+`createMcpAdapter(runtime)` projects registered capabilities into MCP-style tool descriptors and routes calls back through the Capability runtime.
 
 ## Composition
 
-`composeCapabilities()` creates a composite capability and unions the effects required by its steps. `runPipeline()` keeps steps independently planned, authorized, executed, and receipted.
+`composeCapabilities()` creates code-level composite capabilities. `runPipeline()` keeps each step independently planned, authorized, executed, and receipted.
 
-## Receipts, verification, rollback
+## Receipts and rollback
 
-Execution produces a receipt containing capability identity/version, effects, timing, input/output hashes, status, and observed provenance. A capability may provide `verify()` and `rollback()` hooks. Rollback is available only when the manifest explicitly declares `behavior.reversible: true`.
-
-## Provenance
-
-Package acquisition attaches observed package/source metadata to capabilities. Receipts preserve that provenance. Provenance records observations; they are not a substitute for signature or attestation verification.
+Every execution attempt produces a receipt with capability identity/version, status, timing, effects, input/output hashes, verification result, errors, and observed provenance. Receipt storage is pluggable. Rollback requires both `behavior.reversible: true` and a rollback hook.
 
 ## Isolation
 
-`NodePermissionExecutor` and `runInNodePermissionSandbox()` provide an optional out-of-process Node Permission Model execution boundary for module-backed capabilities. This is defense-in-depth, not a hostile-code sandbox. See [SECURITY.md](./SECURITY.md).
+`NodePermissionExecutor` and `runInNodePermissionSandbox()` provide an optional out-of-process Node Permission Model boundary. This is defense-in-depth, not a hostile-code security boundary. See [SECURITY.md](./SECURITY.md).
 
-## Specification
+## CLI
 
-See [SPEC.md](./SPEC.md), [ARCHITECTURE.md](./ARCHITECTURE.md), and [capability-manifest.schema.json](./capability-manifest.schema.json).
+The package ships `cap` and `capability` binaries:
+
+```text
+cap validate <manifest.json>
+cap package <package.json>
+cap acquire <package.json> <capability-id>
+cap plan <package.json> <capability-id> <json-input>
+cap run <package.json> <capability-id> <json-input> [--approve]
+cap find <query> <package.json...>
+cap eval <package.json> <capability-id> <cases.json> [--approve]
+cap trust <package.json> <capability-id>
+cap index <output.json> <package.json...>
+cap openapi <openapi.json> [namespace]
+cap mcp-tools <package.json...>
+```
+
+## Documents
+
+- [Specification](./SPEC.md)
+- [Architecture](./ARCHITECTURE.md)
+- [Security model](./SECURITY.md)
+- [Manifest JSON Schema](./capability-manifest.schema.json)
+- [Public index JSON Schema](./capability-index.schema.json)
 
 ## License
 

@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/wheresmycoleslaw/capability/blob/main/capability-index.schema.json",
+  "title": "Capability Public Index",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["indexVersion", "generatedAt", "packages"],
+  "properties": {
+    "indexVersion": { "const": "0.1" },
+    "generatedAt": { "type": "string", "format": "date-time" },
+    "packages": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "version", "source", "capabilities"],
+        "properties": {
+          "name": { "type": "string", "minLength": 1 },
+          "version": { "type": "string", "minLength": 1 },
+          "source": { "type": "string", "minLength": 1 },
+          "repository": { "type": "string" },
+          "capabilities": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["manifest", "module"],
+              "properties": {
+                "manifest": { "$ref": "./capability-manifest.schema.json" },
+                "module": { "type": "string", "pattern": "^\\./" },
+                "integrity": { "type": "string" }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

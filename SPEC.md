@@ -1,140 +1,106 @@
 # Capability Standard
 
 **Specification version:** 0.1  
-**Package implementation:** 0.1.x  
 **Status:** Experimental
 
-## 1. Purpose
+## Purpose
 
-Capability defines a portable unit of executable functionality that an agent or runtime can discover, inspect, authorize, execute, verify, record, and where supported, roll back.
+Capability defines a portable unit of executable functionality that an agent or runtime can discover, inspect, plan, authorize, execute, verify, record, compose, and where supported, roll back.
 
 ```text
 DISCOVER -> INSPECT -> PLAN -> AUTHORIZE -> EXECUTE -> VERIFY -> RECEIPT
 ```
 
-The standard separates **what a capability says it can do** from **the runtime policy that decides whether it may do it**.
+The standard separates a capability's declared contract from host authorization and execution policy.
 
-## 2. Manifest
+## Manifest
 
-A compliant capability MUST expose a manifest containing `specVersion`, stable namespaced `id`, semantic `version`, `name`, and `description`. It SHOULD expose JSON Schema for `input` and `output`, declared `effects`, behavioral properties, and discovery tags.
+A compliant capability MUST expose `specVersion`, a stable namespaced `id`, semantic `version`, `name`, and `description`. It SHOULD expose JSON Schema for `input` and `output`, declared `effects`, behavioral properties, and discovery tags. `capability-manifest.schema.json` is the machine-readable schema.
 
-The normative machine-readable schema is `capability-manifest.schema.json`.
+## Identity
 
-## 3. Stable identity
-
-`id` MUST contain at least one namespace separator (`/`) and match:
+Capability IDs MUST be namespaced and match:
 
 ```text
 ^[a-z0-9][a-z0-9._-]*(/[a-z0-9][a-z0-9._-]*)+$
 ```
 
-Identity and version are separate. A plan binds both so an implementation cannot silently change between planning and execution.
+Plans bind both capability ID and version.
 
-## 4. Effects
+## Effects
 
-Built-in effects in 0.1 are:
+Built-in effects are `filesystem.read`, `filesystem.write`, `network.connect`, `process.spawn`, `environment.read`, `secrets.read`, `database.read`, `database.write`, `email.send`, `git.commit`, and `git.push`. Extensions MUST use `custom:<namespace>`.
 
-```text
-filesystem.read
-filesystem.write
-network.connect
-process.spawn
-environment.read
-secrets.read
-database.read
-database.write
-email.send
-git.commit
-git.push
-```
+A plan MAY narrow declared effects but MUST NOT add undeclared effects.
 
-Extensions MUST use `custom:<namespace>`. A capability MUST NOT request an effect during planning that it did not declare in its manifest. Declarations are claims; runtimes SHOULD pair them with an execution isolation mechanism when stronger enforcement is required.
+## Inspection
 
-## 5. Behavior
+Inspection MUST NOT execute capability code and MUST NOT expose its executable function.
 
-A manifest MAY declare `deterministic`, `idempotent`, and `reversible`. `reversible: true` SHOULD only be used when a rollback implementation is supplied.
+## Planning
 
-## 6. Inspection
+A plan binds capability ID/version, structured input, input hash, requested effects, summary, creation time, optional plan data, and an integrity fingerprint. A runtime MUST reject modified plans or modified input after planning.
 
-Inspection MUST NOT execute capability code and MUST NOT expose the executable function in the inspection result.
+## Authorization
 
-## 7. Planning
+Authorization belongs to the runtime. The reference policy supports allow, deny, and explicit-approval effect patterns. Deny rules take precedence. The reference runtime denies declared effects by default.
 
-A plan contains a unique plan ID, capability ID/version, structured input and input hash, requested effects, human-readable summary, creation time, optional capability-defined plan data, and an integrity fingerprint.
+## Validation and execution
 
-An implementation MAY narrow its declared effects for a specific invocation. It MUST NOT add undeclared effects. A runtime MUST reject a plan if its fingerprint or input hash changes after planning.
+Inputs SHOULD be validated before execution and outputs SHOULD be validated after execution. The reference runtime validates a common JSON Schema subset.
 
-## 8. Authorization
+## Verification
 
-Authorization is runtime policy, not capability policy. The reference runtime supports allow, deny, and explicit-approval effect patterns. Deny rules take precedence. Wildcards such as `*` and `filesystem.*` are supported. The reference runtime denies effectful capabilities by default.
+A capability MAY define a verification hook. Failed verification makes execution fail and is reflected in its receipt.
 
-## 9. Execution and validation
+## Receipts
 
-Before execution, input SHOULD be validated against the declared input schema. After execution, output SHOULD be validated against the output schema. The reference implementation validates a common JSON Schema subset and allows applications to layer a complete JSON Schema 2020-12 engine when needed.
+Execution attempts produce receipts containing receipt/plan IDs, capability identity/version, status, timing, effects, hashes, optional values, verification, errors, and observed provenance. Receipt storage is replaceable.
 
-## 10. Verification
+## Rollback
 
-A capability MAY expose a verification hook. A failed verification makes the execution fail and is recorded.
+Rollback requires a successful receipt, `behavior.reversible === true`, a rollback hook, and authorization for the relevant effects.
 
-## 11. Receipts
+## Discovery
 
-Every reference-runtime execution attempt produces a receipt containing receipt and plan IDs, capability identity/version, status, timing, effects, input hash, output hash on success, optional input/output values, verification result, serialized errors, and provenance when known. Receipt storage is pluggable.
+The reference registry supports lexical discovery over IDs, names, descriptions, and tags. Semantic ranking is pluggable through `DiscoveryRanker` and `EmbeddingRanker`.
 
-## 12. Rollback
+## Composition
 
-Rollback requires a successful prior receipt, `behavior.reversible === true`, a rollback hook, and authorization for the relevant effects. Rollback operates from the original receipt and records `rolled_back` or `rollback_failed`.
+Composed capabilities MUST declare the union of effects required by their steps. Runtime pipelines MAY preserve per-step planning, authorization, and receipts.
 
-## 13. Discovery
+## Package convention
 
-The reference registry supports lexical discovery over IDs, names, descriptions, and tags. Runtimes MAY provide semantic ranking. `DiscoveryRanker` and `EmbeddingRanker` allow any embedding backend without coupling the standard to a model vendor.
+An npm package MAY advertise exported capabilities through `package.json.capability`. Canonical descriptors contain a package-relative module path and the complete inert manifest. The reference acquisition layer verifies that the imported module's manifest matches the inert package metadata and can verify SHA-256 module integrity.
 
-## 14. Composition
+## Public capability indexes
 
-Capabilities MAY be composed into pipelines. A composed capability MUST declare the union of effects required by its steps. The reference runtime also supports policy-preserving runtime pipelines where each step receives its own plan, authorization decision, and receipt.
+A public index is a static JSON document containing exact package versions, source metadata, and inert capability descriptors. `capability-index.schema.json` defines the reference format. Indexes MAY be independently hosted, cached, merged, and searched before package installation or module import.
 
-## 15. Package discovery convention
+## Package installation
 
-An npm package MAY advertise exported capabilities using a `capability` field in `package.json`:
+The reference npm installer installs the exact version selected by the index with lifecycle scripts disabled. Installation mechanics are replaceable through `CapabilityPackageInstaller`. Installation alone does not establish trust.
 
-```json
-{
-  "capability": {
-    "specVersion": "0.1",
-    "exports": {
-      "image/resize": {
-        "module": "./dist/resize.js",
-        "manifest": {
-          "specVersion": "0.1",
-          "id": "image/resize",
-          "version": "1.0.0",
-          "name": "Resize image",
-          "description": "Resize an image locally.",
-          "effects": ["filesystem.read", "filesystem.write"]
-        }
-      }
-    }
-  }
-}
-```
+## Trust assessment
 
-Every export path MUST be package-relative and every acquired capability's manifest ID MUST equal its declared export ID. Canonical descriptors SHOULD embed the complete inert manifest. The reference acquisition layer compares package metadata to the manifest exported by the acquired module and rejects drift. A string-only module path remains a legacy package declaration but cannot be inspected before import.
+Trust policy operates on observed provenance. The reference assessment can require package identity, integrity, repository, commit, attestation metadata, allowlists, and a minimum deterministic score. A score or metadata reference is not cryptographic proof; hosts requiring such proof MUST verify it using the issuing ecosystem.
 
-This convention enables **index metadata -> discover -> acquire exact module -> authorize -> execute**.
+## Evaluations
 
-## 16. Provenance
+A runtime MAY execute evaluation cases through the normal capability path. The reference eval harness preserves schema validation, authorization, verification, and receipts. Determinism evaluation compares output hashes across repeated executions.
 
-Provenance is runtime-observed metadata, not a self-trust claim. The reference implementation can attach source, npm package/version, repository, commit, integrity, and attestation references to a capability and copy them into receipts. Package-manager signatures and external attestations remain separate verification concerns.
+## OpenAPI interoperability
 
-## 17. Isolation
+OpenAPI 3.1 operations MAY be imported as capabilities. The reference adapter synthesizes structured inputs from parameters/request bodies, reads JSON response schemas where available, and declares `network.connect`. Runtime policy remains authoritative.
 
-The reference package provides an optional Node Permission Model executor for module-backed capabilities. It runs code in a separate Node process, removes inherited environment variables unless explicitly supplied, and maps declared filesystem/process effects onto Node permission flags.
+## MCP interoperability
 
-This is defense-in-depth, not a malicious-code security boundary. Higher-assurance runtimes SHOULD use an OS sandbox, container, VM, WASM runtime, remote worker, or equivalent boundary.
+Capabilities MAY be projected as MCP tools. Schemas become tool schemas; behavior/effects become annotations; capability identity/version remain metadata. MCP annotations are hints and do not replace runtime authorization.
 
-## 18. MCP interoperability
+## Isolation
 
-A capability can be projected as an MCP tool descriptor: manifest ID becomes an MCP-safe tool name, schemas become MCP schemas, behavior/effects become annotations, and capability identity/version are preserved in metadata. MCP annotations remain hints; Capability authorization and isolation remain runtime responsibilities.
+The reference implementation provides an optional Node Permission Model executor for module-backed capabilities. Higher-assurance runtimes SHOULD use a stronger OS/container/VM/WASM/remote boundary for hostile code.
 
-## 19. Compatibility
+## Compatibility
 
-The 0.x series is experimental. Minor versions may change APIs or schema details. The reference implementation preserves the 0.0.x flat `defineCapability()` shape as a compatibility path, assigning legacy definitions a local ID and version when omitted.
+The 0.x series is experimental. The reference implementation retains the 0.0.x flat `defineCapability()` shape as a compatibility path.
