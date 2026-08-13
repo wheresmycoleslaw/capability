@@ -1,6 +1,6 @@
 {
   "name": "@wheresmycoleslaw/capability",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "A standard and runtime for self-describing executable capabilities for AI agents.",
   "type": "module",
   "main": "./dist/index.js",
@@ -8,14 +8,23 @@
   "exports": {
     ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js" },
     "./mcp": { "types": "./dist/mcp.d.ts", "import": "./dist/mcp.js" },
-    "./package": { "types": "./dist/package.d.ts", "import": "./dist/package.js" }
+    "./package": { "types": "./dist/package.d.ts", "import": "./dist/package.js" },
+    "./openapi": { "types": "./dist/openapi.d.ts", "import": "./dist/openapi.js" },
+    "./evals": { "types": "./dist/evals.d.ts", "import": "./dist/evals.js" },
+    "./trust": { "types": "./dist/trust.d.ts", "import": "./dist/trust.js" },
+    "./public-index": { "types": "./dist/public-index.d.ts", "import": "./dist/public-index.js" },
+    "./installer": { "types": "./dist/installer.d.ts", "import": "./dist/installer.js" }
   },
-  "files": ["dist", "README.md", "SPEC.md", "ARCHITECTURE.md", "SECURITY.md", "capability-manifest.schema.json", "CHANGELOG.md", "LICENSE"],
+  "files": [
+    "dist", "README.md", "SPEC.md", "ARCHITECTURE.md", "SECURITY.md",
+    "capability-manifest.schema.json", "CHANGELOG.md", "capability-index.schema.json", "LICENSE"
+  ],
   "sideEffects": false,
   "scripts": {
-    "build": "tsc",
+    "build": "npm run clean && tsc",
     "test": "npm run build && node --test test/*.test.mjs",
-    "check": "npm test && npm pack --dry-run"
+    "check": "npm test && npm pack --dry-run",
+    "clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\""
   },
   "keywords": ["ai", "agents", "capabilities", "tools", "mcp", "automation", "permissions", "runtime", "discovery"],
   "license": "MIT",
@@ -24,5 +33,6 @@
   "homepage": "https://github.com/wheresmycoleslaw/capability#readme",
   "publishConfig": { "access": "public" },
   "engines": { "node": ">=20" },
-  "devDependencies": { "typescript": "^5.8.3", "@types/node": "^22.0.0" }
+  "devDependencies": { "typescript": "^5.8.3", "@types/node": "^22.0.0" },
+  "bin": { "cap": "./dist/cli.js", "capability": "./dist/cli.js" }
 }
