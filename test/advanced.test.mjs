@@ -77,7 +77,7 @@ test("OpenAPI 3.1 operations become policy-controlled capabilities", async () =>
     paths: { "/people/{id}": { get: { operationId: "getPerson", parameters: [
       { name: "id", in: "path", required: true, schema: { type: "string" } },
       { name: "verbose", in: "query", schema: { type: "boolean" } }
-    ], responses: { "200": { content: { "application/json": { schema: { type: "object", properties: { id: { type: "string" }, name: { type: "string" } }, required: ["id", "name"] } } } } } } } } }
+    ], responses: { "200": { content: { "application/json": { schema: { type: "object", properties: { id: { type: "string" }, name: { type: "string" } }, required: ["id", "name"] } } } } } } } }
   }, { fetch: fakeFetch });
   assert.deepEqual(capability.manifest.effects, ["network.connect"]);
   const runtime = new CapabilityRuntime({ policy: permissivePolicy }).register(capability);
