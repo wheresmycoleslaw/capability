@@ -1,0 +1,51 @@
+{
+  "name": "@wheresmycoleslaw/capability",
+  "version": "0.0.1",
+  "description": "A standard for self-describing executable capabilities for AI agents.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "SPEC.md",
+    "LICENSE"
+  ],
+  "sideEffects": false,
+  "scripts": {
+    "build": "tsc",
+    "test": "npm run build"
+  },
+  "keywords": [
+    "ai",
+    "agents",
+    "capabilities",
+    "tools",
+    "mcp",
+    "automation"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/wheresmycoleslaw/capability.git"
+  },
+  "bugs": {
+    "url": "https://github.com/wheresmycoleslaw/capability/issues"
+  },
+  "homepage": "https://github.com/wheresmycoleslaw/capability#readme",
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "devDependencies": {
+    "typescript": "^5.8.3"
+  }
+}
