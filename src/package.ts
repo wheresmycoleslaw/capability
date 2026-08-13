@@ -19,6 +19,7 @@ export type CapabilityPackageDeclaration = {
 export type PackageJsonWithCapabilities = {
   name?: string;
   version?: string;
+  repository?: string | { type?: string; url?: string };
   capability?: CapabilityPackageDeclaration;
 };
 
