@@ -25,4 +25,5 @@ export * from "./ecosystem.js";
 export * from "./docker.js";
 export * from "./lockfile.js";
 export * from "./innovation.js";
+export * from "./evolution.js";
 export * from "./scaffold.js";
