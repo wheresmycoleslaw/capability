@@ -34,20 +34,19 @@ for (const pkg of index.packages) {
   if (pkg.source !== "npm") continue;
   const isLocalReleaseCandidate = pkg.name === localPackage.name && pkg.version === localPackage.version;
   let metadata;
-  if (isLocalReleaseCandidate) {
+  let npmResolved = false;
+  try {
+    const { stdout } = await execFileAsync(npmCommand(), ["view", `${pkg.name}@${pkg.version}`, "--json"], { maxBuffer: 8 * 1024 * 1024 });
+    metadata = JSON.parse(stdout);
+    npmResolved = true;
+    npmArtifactsVerified += 1;
+  } catch (error) {
+    if (!isLocalReleaseCandidate) throw new Error(`Unable to resolve ${pkg.name}@${pkg.version} from npm`, { cause: error });
     metadata = localPackage;
     localReleaseCandidatesVerified += 1;
-  } else {
-    try {
-      const { stdout } = await execFileAsync(npmCommand(), ["view", `${pkg.name}@${pkg.version}`, "--json"], { maxBuffer: 8 * 1024 * 1024 });
-      metadata = JSON.parse(stdout);
-      npmArtifactsVerified += 1;
-    } catch (error) {
-      throw new Error(`Unable to resolve ${pkg.name}@${pkg.version} from npm`, { cause: error });
-    }
-    if (metadata.name !== pkg.name || metadata.version !== pkg.version) throw new Error(`npm identity mismatch for ${pkg.name}@${pkg.version}`);
-    if (!metadata.dist?.integrity) throw new Error(`${pkg.name}@${pkg.version} has no npm dist integrity`);
   }
+  if (metadata.name !== pkg.name || metadata.version !== pkg.version) throw new Error(`package identity mismatch for ${pkg.name}@${pkg.version}`);
+  if (npmResolved && !metadata.dist?.integrity) throw new Error(`${pkg.name}@${pkg.version} has no npm dist integrity`);
   if (!metadata.capability?.exports) throw new Error(`${pkg.name}@${pkg.version} does not publish package.json capability metadata`);
   for (const indexed of pkg.capabilities) {
     const remote = metadata.capability.exports[indexed.manifest.id];
