@@ -18,6 +18,7 @@
     "./docker": { "types": "./dist/docker.d.ts", "import": "./dist/docker.js" },
     "./lockfile": { "types": "./dist/lockfile.d.ts", "import": "./dist/lockfile.js" },
     "./innovation": { "types": "./dist/innovation.d.ts", "import": "./dist/innovation.js" },
+    "./evolution": { "types": "./dist/evolution.d.ts", "import": "./dist/evolution.js" },
     "./scaffold": { "types": "./dist/scaffold.d.ts", "import": "./dist/scaffold.js" }
   },
   "files": [
@@ -134,6 +135,36 @@
           "input": { "type": "object", "properties": { "steps": { "type": "array", "items": { "type": "object" } } }, "required": ["steps"] },
           "output": { "type": "object", "properties": { "pointOfNoReturn": {}, "approvalCheckpoints": { "type": "array" }, "retrySafePrefixLength": { "type": "number" }, "compensationCoverage": { "type": "number" }, "effects": { "type": "array" } }, "required": ["pointOfNoReturn", "approvalCheckpoints", "retrySafePrefixLength", "compensationCoverage", "effects"] },
           "effects": [], "behavior": { "deterministic": true, "idempotent": true, "reversible": false }, "tags": ["capability", "planning", "rollback", "failure", "risk", "point-of-no-return"]
+        }
+      },
+      "capability/substitution-certificate": {
+        "module": "./dist/builtins/capability-substitution-certificate.js",
+        "manifest": {
+          "specVersion": "0.1", "id": "capability/substitution-certificate", "version": "1.0.0", "name": "Safe Substitution Certificate",
+          "description": "Certify whether one capability may replace another without expanding authority, weakening declared behavior, lowering trust, or breaking the conservative machine-readable contract.",
+          "input": { "type": "object", "properties": { "original": { "type": "object" }, "replacement": { "type": "object" }, "originalTrust": { "type": "object" }, "replacementTrust": { "type": "object" } }, "required": ["original", "replacement"] },
+          "output": { "type": "object", "properties": { "accepted": { "type": "boolean" }, "original": { "type": "object" }, "replacement": { "type": "object" }, "authorityDelta": { "type": "object" }, "behaviorRegressions": { "type": "array" }, "contractBreaking": { "type": "array" }, "trustRegression": { "type": "boolean" }, "reasons": { "type": "array" }, "certificate": { "type": "string" } }, "required": ["accepted", "original", "replacement", "authorityDelta", "behaviorRegressions", "contractBreaking", "trustRegression", "reasons", "certificate"] },
+          "effects": [], "behavior": { "deterministic": true, "idempotent": true, "reversible": false }, "tags": ["capability", "substitution", "hot-swap", "authority", "trust", "contract"]
+        }
+      },
+      "capability/contract-evolution": {
+        "module": "./dist/builtins/capability-contract-evolution.js",
+        "manifest": {
+          "specVersion": "0.1", "id": "capability/contract-evolution", "version": "1.0.0", "name": "Capability Contract Evolution Gate",
+          "description": "Classify whether a new capability version is safely substitutable by considering input/output compatibility, authority expansion, and behavioral guarantees that ordinary package versioning does not capture.",
+          "input": { "type": "object", "properties": { "previous": { "type": "object" }, "next": { "type": "object" } }, "required": ["previous", "next"] },
+          "output": { "type": "object", "properties": { "classification": { "type": "string" }, "semverRecommendation": { "type": "string" }, "substitution": { "type": "object" }, "changes": { "type": "array" } }, "required": ["classification", "semverRecommendation", "substitution", "changes"] },
+          "effects": [], "behavior": { "deterministic": true, "idempotent": true, "reversible": false }, "tags": ["capability", "versioning", "contract", "effects", "compatibility", "upgrade"]
+        }
+      },
+      "capability/dominance-resolver": {
+        "module": "./dist/builtins/capability-dominance-resolver.js",
+        "manifest": {
+          "specVersion": "0.1", "id": "capability/dominance-resolver", "version": "1.0.0", "name": "Capability Dominance Resolver",
+          "description": "Find the non-dominated frontier among interchangeable capabilities without hiding tradeoffs inside one score, preferring candidates that are no worse on authority risk, trust, determinism, and reversibility.",
+          "input": { "type": "object", "properties": { "candidates": { "type": "array", "items": { "type": "object" } } }, "required": ["candidates"] },
+          "output": { "type": "object", "properties": { "frontier": { "type": "array" }, "dominated": { "type": "array" } }, "required": ["frontier", "dominated"] },
+          "effects": [], "behavior": { "deterministic": true, "idempotent": true, "reversible": false }, "tags": ["capability", "pareto", "selection", "authority", "trust", "substitution"]
         }
       }
     }
