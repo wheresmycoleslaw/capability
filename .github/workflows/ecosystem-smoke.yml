@@ -26,13 +26,22 @@ jobs:
           VERSION=$(cat .release)
           npm install --global "@wheresmycoleslaw/capability@$VERSION"
       - run: cap doctor
-      - run: cap find "normalize text"
-      - name: Execute through Node isolation
+      - name: Discover new agent-native capability
         run: |
-          cap exec text/normalize '{"text":"  Hello   WORLD  ","case":"lower"}' --executor=node > /tmp/capability-result.json
-          grep -q 'hello world' /tmp/capability-result.json
+          cap find "failure frontier" > /tmp/capability-find.json
+          grep -q 'capability/failure-frontier' /tmp/capability-find.json
+      - name: Scaffold a fresh adopter project
+        run: |
+          cap create /tmp/hello-capability --name hello-capability --id hello/run --description "A clean-room adoption smoke capability."
+          cap readiness /tmp/hello-capability/package.json > /tmp/readiness.json
+          grep -q '"ok": true' /tmp/readiness.json
+          grep -q 'id-token: write' /tmp/hello-capability/.github/workflows/publish.yml
+      - name: Execute new invention through Node isolation
+        run: |
+          cap exec capability/failure-frontier '{"steps":[{"id":"read","effects":["filesystem.read"],"behavior":{"idempotent":true,"reversible":false}},{"id":"write","effects":["filesystem.write"],"behavior":{"idempotent":true,"reversible":true}},{"id":"send","effects":["email.send"],"behavior":{"idempotent":false,"reversible":false}}]}' --executor=node > /tmp/frontier.json
+          grep -q '"pointOfNoReturn":"send"\|"pointOfNoReturn": "send"' /tmp/frontier.json
       - name: Execute through Docker isolation
         run: |
           docker pull node:24-alpine
-          cap exec text/slugify '{"text":"Capability Ecosystem"}' --executor=docker > /tmp/capability-docker.json
-          grep -q 'capability-ecosystem' /tmp/capability-docker.json
+          cap exec capability/authority-envelope '{"manifests":[{"specVersion":"0.1","id":"demo/read","version":"1.0.0","name":"Read","description":"read","effects":["filesystem.read"],"behavior":{"deterministic":true,"idempotent":true,"reversible":false}}],"requiredEffects":["filesystem.read"]}' --executor=docker > /tmp/authority.json
+          grep -q '"riskScore"' /tmp/authority.json
