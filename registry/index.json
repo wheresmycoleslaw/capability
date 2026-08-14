@@ -1,6 +1,6 @@
 {
   "indexVersion": "0.1",
-  "generatedAt": "2026-08-14T17:47:00.000Z",
+  "generatedAt": "2026-08-14T18:08:00.000Z",
   "metadata": {
     "name": "Capability Public Registry",
     "maintainer": "wheresmycoleslaw",
@@ -16,138 +16,111 @@
       "capabilities": [
         {
           "manifest": {
-            "specVersion": "0.1",
-            "id": "text/normalize",
-            "version": "1.0.0",
-            "name": "Normalize Text",
+            "specVersion": "0.1", "id": "text/normalize", "version": "1.0.0", "name": "Normalize Text",
             "description": "Normalize whitespace, surrounding space, and letter case in text without network or filesystem access.",
             "input": { "type": "object", "properties": { "text": { "type": "string" }, "trim": { "type": "boolean" }, "collapseWhitespace": { "type": "boolean" }, "case": { "type": "string", "enum": ["preserve", "lower", "upper"] } }, "required": ["text"] },
             "output": { "type": "object", "properties": { "text": { "type": "string" } }, "required": ["text"] },
-            "effects": [],
-            "behavior": { "deterministic": true, "idempotent": true, "reversible": false },
-            "tags": ["text", "normalize", "whitespace", "case"]
-          },
-          "module": "./dist/builtins/text-normalize.js"
+            "effects": [], "behavior": { "deterministic": true, "idempotent": true, "reversible": false }, "tags": ["text", "normalize", "whitespace", "case"]
+          }, "module": "./dist/builtins/text-normalize.js"
         },
         {
           "manifest": {
-            "specVersion": "0.1",
-            "id": "text/slugify",
-            "version": "1.0.0",
-            "name": "Slugify Text",
+            "specVersion": "0.1", "id": "text/slugify", "version": "1.0.0", "name": "Slugify Text",
             "description": "Convert text to a deterministic URL-friendly slug without external effects.",
             "input": { "type": "object", "properties": { "text": { "type": "string" }, "separator": { "type": "string" }, "lowercase": { "type": "boolean" } }, "required": ["text"] },
             "output": { "type": "object", "properties": { "slug": { "type": "string" } }, "required": ["slug"] },
-            "effects": [],
-            "behavior": { "deterministic": true, "idempotent": true, "reversible": false },
-            "tags": ["text", "slug", "url", "normalize"]
-          },
-          "module": "./dist/builtins/text-slugify.js"
+            "effects": [], "behavior": { "deterministic": true, "idempotent": true, "reversible": false }, "tags": ["text", "slug", "url", "normalize"]
+          }, "module": "./dist/builtins/text-slugify.js"
         },
         {
           "manifest": {
-            "specVersion": "0.1",
-            "id": "data/sha256",
-            "version": "1.0.0",
-            "name": "Stable SHA-256",
+            "specVersion": "0.1", "id": "data/sha256", "version": "1.0.0", "name": "Stable SHA-256",
             "description": "Compute a deterministic SHA-256 digest of a structured JSON-compatible value.",
             "input": { "type": "object", "properties": { "value": {} }, "required": ["value"] },
             "output": { "type": "object", "properties": { "sha256": { "type": "string" } }, "required": ["sha256"] },
-            "effects": [],
-            "behavior": { "deterministic": true, "idempotent": true, "reversible": false },
-            "tags": ["data", "hash", "sha256", "digest"]
-          },
-          "module": "./dist/builtins/data-sha256.js"
+            "effects": [], "behavior": { "deterministic": true, "idempotent": true, "reversible": false }, "tags": ["data", "hash", "sha256", "digest"]
+          }, "module": "./dist/builtins/data-sha256.js"
         },
         {
           "manifest": {
-            "specVersion": "0.1",
-            "id": "json/get",
-            "version": "1.0.0",
-            "name": "Get JSON Path",
+            "specVersion": "0.1", "id": "json/get", "version": "1.0.0", "name": "Get JSON Path",
             "description": "Read a dot/bracket path from structured data without executing expressions or accessing external resources.",
             "input": { "type": "object", "properties": { "value": {}, "path": { "type": "string" } }, "required": ["value", "path"] },
             "output": { "type": "object", "properties": { "found": { "type": "boolean" }, "value": {} }, "required": ["found"] },
-            "effects": [],
-            "behavior": { "deterministic": true, "idempotent": true, "reversible": false },
-            "tags": ["json", "data", "path", "query"]
-          },
-          "module": "./dist/builtins/json-get.js"
+            "effects": [], "behavior": { "deterministic": true, "idempotent": true, "reversible": false }, "tags": ["json", "data", "path", "query"]
+          }, "module": "./dist/builtins/json-get.js"
         },
         {
           "manifest": {
-            "specVersion": "0.1",
-            "id": "capability/novelty-radar",
-            "version": "1.0.0",
-            "name": "Capability Novelty Radar",
+            "specVersion": "0.1", "id": "capability/novelty-radar", "version": "1.0.0", "name": "Capability Novelty Radar",
             "description": "Measure whether a proposed capability is a functional twin, incremental variation, distinct design, or genuinely novel ecosystem contribution by comparing contracts, effects, tags, and purpose signals.",
             "input": { "type": "object", "properties": { "proposed": { "type": "object" }, "existing": { "type": "array", "items": { "type": "object" } } }, "required": ["proposed", "existing"] },
             "output": { "type": "object", "properties": { "uniquenessScore": { "type": "number" }, "classification": { "type": "string" }, "nearest": { "type": "array" }, "recommendation": { "type": "string" } }, "required": ["uniquenessScore", "classification", "nearest", "recommendation"] },
-            "effects": [],
-            "behavior": { "deterministic": true, "idempotent": true, "reversible": false },
-            "tags": ["capability", "innovation", "novelty", "duplicate-detection", "ecosystem-design"]
-          },
-          "module": "./dist/builtins/capability-novelty-radar.js"
+            "effects": [], "behavior": { "deterministic": true, "idempotent": true, "reversible": false }, "tags": ["capability", "innovation", "novelty", "duplicate-detection", "ecosystem-design"]
+          }, "module": "./dist/builtins/capability-novelty-radar.js"
         },
         {
           "manifest": {
-            "specVersion": "0.1",
-            "id": "capability/authority-envelope",
-            "version": "1.0.0",
-            "name": "Authority Envelope",
+            "specVersion": "0.1", "id": "capability/authority-envelope", "version": "1.0.0", "name": "Authority Envelope",
             "description": "Compute the minimum visible authority surface of a capability set, expose over-declared permissions, and summarize reversibility and execution risk before an agent commits to a plan.",
             "input": { "type": "object", "properties": { "manifests": { "type": "array", "items": { "type": "object" } }, "requiredEffects": { "type": "array", "items": { "type": "string" } } }, "required": ["manifests"] },
             "output": { "type": "object", "properties": { "effects": { "type": "array" }, "openWorldEffects": { "type": "array" }, "overDeclaredEffects": { "type": "array" }, "perCapabilityOverDeclaration": { "type": "object" }, "riskScore": { "type": "number" }, "deterministic": { "type": "boolean" }, "fullyReversible": { "type": "boolean" } }, "required": ["effects", "openWorldEffects", "overDeclaredEffects", "perCapabilityOverDeclaration", "riskScore", "deterministic", "fullyReversible"] },
-            "effects": [],
-            "behavior": { "deterministic": true, "idempotent": true, "reversible": false },
-            "tags": ["capability", "least-authority", "permissions", "risk", "planning"]
-          },
-          "module": "./dist/builtins/capability-authority-envelope.js"
+            "effects": [], "behavior": { "deterministic": true, "idempotent": true, "reversible": false }, "tags": ["capability", "least-authority", "permissions", "risk", "planning"]
+          }, "module": "./dist/builtins/capability-authority-envelope.js"
         },
         {
           "manifest": {
-            "specVersion": "0.1",
-            "id": "capability/contract-router",
-            "version": "1.0.0",
-            "name": "Contract Router",
+            "specVersion": "0.1", "id": "capability/contract-router", "version": "1.0.0", "name": "Contract Router",
             "description": "Determine which downstream capabilities can consume an upstream result without guessing, and derive the exact safe projection of compatible fields for automatic composition.",
             "input": { "type": "object", "properties": { "producerOutput": { "type": "object" }, "consumers": { "type": "array", "items": { "type": "object" } } }, "required": ["consumers"] },
             "output": { "type": "array", "items": { "type": "object" } },
-            "effects": [],
-            "behavior": { "deterministic": true, "idempotent": true, "reversible": false },
-            "tags": ["capability", "composition", "routing", "contracts", "schema"]
-          },
-          "module": "./dist/builtins/capability-contract-router.js"
+            "effects": [], "behavior": { "deterministic": true, "idempotent": true, "reversible": false }, "tags": ["capability", "composition", "routing", "contracts", "schema"]
+          }, "module": "./dist/builtins/capability-contract-router.js"
         },
         {
           "manifest": {
-            "specVersion": "0.1",
-            "id": "capability/receipt-drift",
-            "version": "1.0.0",
-            "name": "Receipt Drift Detector",
+            "specVersion": "0.1", "id": "capability/receipt-drift", "version": "1.0.0", "name": "Receipt Drift Detector",
             "description": "Detect behavioral, authority, and supply-chain drift between two executions, including the high-risk case where identical input produces different output under an apparently stable capability.",
             "input": { "type": "object", "properties": { "baseline": { "type": "object" }, "current": { "type": "object" } }, "required": ["baseline", "current"] },
             "output": { "type": "object", "properties": { "severity": { "type": "string" }, "reproducible": { "type": "boolean" }, "changes": { "type": "array" }, "score": { "type": "number" } }, "required": ["severity", "reproducible", "changes", "score"] },
-            "effects": [],
-            "behavior": { "deterministic": true, "idempotent": true, "reversible": false },
-            "tags": ["capability", "receipts", "drift", "reproducibility", "supply-chain"]
-          },
-          "module": "./dist/builtins/capability-receipt-drift.js"
+            "effects": [], "behavior": { "deterministic": true, "idempotent": true, "reversible": false }, "tags": ["capability", "receipts", "drift", "reproducibility", "supply-chain"]
+          }, "module": "./dist/builtins/capability-receipt-drift.js"
         },
         {
           "manifest": {
-            "specVersion": "0.1",
-            "id": "capability/failure-frontier",
-            "version": "1.0.0",
-            "name": "Failure Frontier",
+            "specVersion": "0.1", "id": "capability/failure-frontier", "version": "1.0.0", "name": "Failure Frontier",
             "description": "Locate the point of no return in a multi-capability plan, identify approval checkpoints, and quantify how much of the mutating path can be compensated or safely retried before execution starts.",
             "input": { "type": "object", "properties": { "steps": { "type": "array", "items": { "type": "object" } } }, "required": ["steps"] },
             "output": { "type": "object", "properties": { "pointOfNoReturn": {}, "approvalCheckpoints": { "type": "array" }, "retrySafePrefixLength": { "type": "number" }, "compensationCoverage": { "type": "number" }, "effects": { "type": "array" } }, "required": ["pointOfNoReturn", "approvalCheckpoints", "retrySafePrefixLength", "compensationCoverage", "effects"] },
-            "effects": [],
-            "behavior": { "deterministic": true, "idempotent": true, "reversible": false },
-            "tags": ["capability", "planning", "rollback", "failure", "risk", "point-of-no-return"]
-          },
-          "module": "./dist/builtins/capability-failure-frontier.js"
+            "effects": [], "behavior": { "deterministic": true, "idempotent": true, "reversible": false }, "tags": ["capability", "planning", "rollback", "failure", "risk", "point-of-no-return"]
+          }, "module": "./dist/builtins/capability-failure-frontier.js"
+        },
+        {
+          "manifest": {
+            "specVersion": "0.1", "id": "capability/substitution-certificate", "version": "1.0.0", "name": "Safe Substitution Certificate",
+            "description": "Certify whether one capability may replace another without expanding authority, weakening declared behavior, lowering trust, or breaking the conservative machine-readable contract.",
+            "input": { "type": "object", "properties": { "original": { "type": "object" }, "replacement": { "type": "object" }, "originalTrust": { "type": "object" }, "replacementTrust": { "type": "object" } }, "required": ["original", "replacement"] },
+            "output": { "type": "object", "properties": { "accepted": { "type": "boolean" }, "original": { "type": "object" }, "replacement": { "type": "object" }, "authorityDelta": { "type": "object" }, "behaviorRegressions": { "type": "array" }, "contractBreaking": { "type": "array" }, "trustRegression": { "type": "boolean" }, "reasons": { "type": "array" }, "certificate": { "type": "string" } }, "required": ["accepted", "original", "replacement", "authorityDelta", "behaviorRegressions", "contractBreaking", "trustRegression", "reasons", "certificate"] },
+            "effects": [], "behavior": { "deterministic": true, "idempotent": true, "reversible": false }, "tags": ["capability", "substitution", "hot-swap", "authority", "trust", "contract"]
+          }, "module": "./dist/builtins/capability-substitution-certificate.js"
+        },
+        {
+          "manifest": {
+            "specVersion": "0.1", "id": "capability/contract-evolution", "version": "1.0.0", "name": "Capability Contract Evolution Gate",
+            "description": "Classify whether a new capability version is safely substitutable by considering input/output compatibility, authority expansion, and behavioral guarantees that ordinary package versioning does not capture.",
+            "input": { "type": "object", "properties": { "previous": { "type": "object" }, "next": { "type": "object" } }, "required": ["previous", "next"] },
+            "output": { "type": "object", "properties": { "classification": { "type": "string" }, "semverRecommendation": { "type": "string" }, "substitution": { "type": "object" }, "changes": { "type": "array" } }, "required": ["classification", "semverRecommendation", "substitution", "changes"] },
+            "effects": [], "behavior": { "deterministic": true, "idempotent": true, "reversible": false }, "tags": ["capability", "versioning", "contract", "effects", "compatibility", "upgrade"]
+          }, "module": "./dist/builtins/capability-contract-evolution.js"
+        },
+        {
+          "manifest": {
+            "specVersion": "0.1", "id": "capability/dominance-resolver", "version": "1.0.0", "name": "Capability Dominance Resolver",
+            "description": "Find the non-dominated frontier among interchangeable capabilities without hiding tradeoffs inside one score, preferring candidates that are no worse on authority risk, trust, determinism, and reversibility.",
+            "input": { "type": "object", "properties": { "candidates": { "type": "array", "items": { "type": "object" } } }, "required": ["candidates"] },
+            "output": { "type": "object", "properties": { "frontier": { "type": "array" }, "dominated": { "type": "array" } }, "required": ["frontier", "dominated"] },
+            "effects": [], "behavior": { "deterministic": true, "idempotent": true, "reversible": false }, "tags": ["capability", "pareto", "selection", "authority", "trust", "substitution"]
+          }, "module": "./dist/builtins/capability-dominance-resolver.js"
         }
       ]
     }
