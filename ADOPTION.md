@@ -105,6 +105,37 @@ This is a different design target from ordinary plugin systems: a capability sho
 
 `capability/receipt-drift` compares execution receipts and can flag the especially important case where the same input produces a different output under an apparently stable capability, as well as effect or supply-chain drift.
 
+## Design for safe replacement
+
+Dynamic discovery creates a problem ordinary package managers do not answer: two abilities can look interchangeable while one silently requires more authority, drops an output guarantee, weakens determinism, or comes from a weaker trust posture.
+
+`capability/substitution-certificate` evaluates a proposed replacement across those dimensions and emits a deterministic certificate only when the conservative substitution check passes. A replacement may reduce authority; it may not silently expand it.
+
+For programmatic use:
+
+```ts
+import { certifyCapabilitySubstitution } from "@wheresmycoleslaw/capability/evolution";
+
+const certificate = certifyCapabilitySubstitution(original, replacement, originalTrust, replacementTrust);
+if (!certificate.accepted) {
+  // do not hot-swap this ability automatically
+}
+```
+
+## Design for capability evolution
+
+Ordinary semantic versioning mostly describes API compatibility. Capability contracts also contain authority and behavioral promises.
+
+`capability/contract-evolution` classifies a new version as a safe patch, authority-reducing change, review-required change, or breaking change. It recommends patch/minor/major while considering input/output guarantees, effects, determinism, idempotence, and reversibility.
+
+This lets an ecosystem distinguish a harmless implementation fix from a version that suddenly needs network access even when its function signature looks unchanged.
+
+## Design for selection without hiding tradeoffs
+
+`capability/dominance-resolver` computes the non-dominated frontier among interchangeable candidates using authority risk, trust, determinism, and reversibility. It deliberately does not collapse those dimensions into one magic score.
+
+If one candidate is strictly worse than another on all of those dimensions, it can be removed from consideration. If two candidates represent a real tradeoff, both remain visible for the host or agent policy to choose between.
+
 ## The adoption test
 
 Capability has crossed from project to standard when independently authored packages and independently hosted indexes interoperate without changes to the runtime.
