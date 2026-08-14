@@ -14,14 +14,23 @@ import { assessCapabilityTrust, strictNpmTrustPolicy } from "./trust.js";
 import { createCapabilityIndex, packageExportsToIndexCapabilities, type PublicIndexPackage } from "./public-index.js";
 import type { PackageJsonWithCapabilities } from "./package.js";
 import { capabilitiesFromOpenApi } from "./openapi.js";
-import { CapabilityHub, DEFAULT_CAPABILITY_INDEX_URL, capabilityDoctor } from "./ecosystem.js";
+import { CapabilityHub, DEFAULT_CAPABILITY_INDEX_URL, capabilityDoctor, fetchCapabilityNetwork } from "./ecosystem.js";
 import { AutoIsolatedExecutor, DockerExecutor } from "./docker.js";
 import { InProcessExecutor, NodePermissionExecutor } from "./executor.js";
 import { NpmPackageInstaller, VerifiedNpmPackageInstaller } from "./installer.js";
 import { writeCapabilityLock } from "./lockfile.js";
+import { assessCapabilityNovelty } from "./innovation.js";
+import { assessProjectReadiness, scaffoldCapabilityProject } from "./scaffold.js";
+import type { CapabilityManifest } from "./types.js";
 
 function usage(): never {
   console.error(`capability CLI
+
+Developer onboarding:
+  cap create <directory> [--name <package>] [--id <capability-id>] [--description <text>] [--repo <url>] [--force]
+  cap readiness [package.json]
+  cap novelty <capability-id|manifest.json> [--package <package.json>] [--index <url>]
+  cap registry-entry [package.json] [--out <path>]
 
 Live ecosystem:
   cap find <query> [--index <url>] [--limit <n>]
@@ -84,12 +93,31 @@ async function runtimeForPackage(packageJsonPath: string, id: string) {
   return { capability, runtime };
 }
 
-async function indexPackageRecord(packageJsonPath: string): Promise<PublicIndexPackage> {
+function repositoryUrl(packageJson: PackageJsonWithCapabilities): string | undefined {
+  const raw = typeof packageJson.repository === "string" ? packageJson.repository : packageJson.repository?.url;
+  return raw?.replace(/^git\+/, "").replace(/\.git$/, "");
+}
+
+async function indexPackageRecord(packageJsonPath: string, source?: string): Promise<PublicIndexPackage> {
   const absolute = resolve(packageJsonPath);
   const packageJson = JSON.parse(await readFile(absolute, "utf8")) as PackageJsonWithCapabilities;
   if (!packageJson.name || !packageJson.version || !packageJson.capability) throw new Error(`${packageJsonPath} must contain name, version and capability metadata`);
-  const repository = typeof packageJson.repository === "string" ? packageJson.repository : packageJson.repository?.url;
-  return { name: packageJson.name, version: packageJson.version, source: absolute, ...(repository ? { repository } : {}), capabilities: packageExportsToIndexCapabilities(packageJson.capability.exports) };
+  const repository = repositoryUrl(packageJson);
+  return { name: packageJson.name, version: packageJson.version, source: source ?? absolute, ...(repository ? { repository } : {}), capabilities: packageExportsToIndexCapabilities(packageJson.capability.exports) };
+}
+
+async function localManifest(query: string, packageJsonPath: string): Promise<CapabilityManifest> {
+  if (query.endsWith(".json")) {
+    const value = JSON.parse(await readFile(resolve(query), "utf8")) as CapabilityManifest;
+    const issues = validateManifest(value);
+    if (issues.length) throw new TypeError(`Invalid manifest: ${issues.join("; ")}`);
+    return value;
+  }
+  const pkg = JSON.parse(await readFile(resolve(packageJsonPath), "utf8")) as PackageJsonWithCapabilities;
+  const entry = pkg.capability?.exports[query];
+  if (!entry) throw new Error(`Capability ${query} was not found in ${packageJsonPath}`);
+  if (typeof entry === "string") throw new Error(`${query} has no inert manifest; novelty analysis never imports executable code`);
+  return entry.manifest;
 }
 
 async function liveHub(args: string[], executorName?: string) {
@@ -108,6 +136,53 @@ async function main() {
   const [, , command, ...rawArgs] = process.argv;
   if (!command) usage();
   const args = [...rawArgs];
+
+  if (command === "create") {
+    const packageName = takeOption(args, "--name");
+    const capabilityId = takeOption(args, "--id");
+    const description = takeOption(args, "--description");
+    const repository = takeOption(args, "--repo");
+    const force = takeFlag(args, "--force");
+    const directory = args.shift() ?? usage();
+    if (args.length) usage();
+    const result = await scaffoldCapabilityProject({ directory, packageName, capabilityId, description, repository, force });
+    console.log(JSON.stringify({ ...result, next: [`cd ${result.directory}`, "npm install", "npm test", "npm run readiness", "npm run novelty"] }, null, 2));
+    return;
+  }
+
+  if (command === "readiness") {
+    const packageJsonPath = args.shift() ?? "package.json";
+    if (args.length) usage();
+    const report = await assessProjectReadiness(packageJsonPath);
+    console.log(JSON.stringify(report, null, 2));
+    process.exitCode = report.ok ? 0 : 1;
+    return;
+  }
+
+  if (command === "novelty") {
+    const packageJsonPath = takeOption(args, "--package") ?? "package.json";
+    const indexes = liveIndexes(args);
+    const query = args.shift() ?? usage();
+    if (args.length) usage();
+    const proposed = await localManifest(query, packageJsonPath);
+    const network = await fetchCapabilityNetwork(indexes);
+    const existing = network.index.packages.flatMap((pkg) => pkg.capabilities.map((entry) => entry.manifest));
+    console.log(JSON.stringify({ proposed: { id: proposed.id, version: proposed.version }, sources: network.sources, ...assessCapabilityNovelty(proposed, existing) }, null, 2));
+    return;
+  }
+
+  if (command === "registry-entry") {
+    const output = takeOption(args, "--out");
+    const packageJsonPath = args.shift() ?? "package.json";
+    if (args.length) usage();
+    const record = await indexPackageRecord(packageJsonPath, "npm");
+    const text = `${JSON.stringify(record, null, 2)}\n`;
+    if (output) {
+      await writeFile(resolve(output), text, "utf8");
+      console.log(JSON.stringify({ output: resolve(output), package: `${record.name}@${record.version}`, capabilities: record.capabilities.length }, null, 2));
+    } else console.log(text.trimEnd());
+    return;
+  }
 
   if (command === "doctor") {
     const index = takeOption(args, "--index") ?? DEFAULT_CAPABILITY_INDEX_URL;
@@ -216,7 +291,7 @@ async function main() {
   if (command === "index") {
     const [outputPath, ...packages] = args;
     if (!outputPath || !packages.length) usage();
-    const records = await Promise.all(packages.map(indexPackageRecord));
+    const records = await Promise.all(packages.map((path) => indexPackageRecord(path)));
     const index = createCapabilityIndex(records);
     await writeFile(resolve(outputPath), `${JSON.stringify(index, null, 2)}\n`, "utf8");
     console.log(JSON.stringify({ output: resolve(outputPath), packages: records.length, capabilities: records.reduce((sum, pkg) => sum + pkg.capabilities.length, 0) }, null, 2));

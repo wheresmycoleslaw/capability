@@ -1,7 +1,7 @@
 {
   "name": "@wheresmycoleslaw/capability",
-  "version": "0.3.0",
-  "description": "A standard, runtime, and federated ecosystem for safely discoverable executable capabilities for AI agents.",
+  "version": "0.4.0",
+  "description": "A standard, runtime, developer kit, and federated ecosystem for safely discoverable executable capabilities for AI agents.",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -16,10 +16,13 @@
     "./installer": { "types": "./dist/installer.d.ts", "import": "./dist/installer.js" },
     "./ecosystem": { "types": "./dist/ecosystem.d.ts", "import": "./dist/ecosystem.js" },
     "./docker": { "types": "./dist/docker.d.ts", "import": "./dist/docker.js" },
-    "./lockfile": { "types": "./dist/lockfile.d.ts", "import": "./dist/lockfile.js" }
+    "./lockfile": { "types": "./dist/lockfile.d.ts", "import": "./dist/lockfile.js" },
+    "./innovation": { "types": "./dist/innovation.d.ts", "import": "./dist/innovation.js" },
+    "./evolution": { "types": "./dist/evolution.d.ts", "import": "./dist/evolution.js" },
+    "./scaffold": { "types": "./dist/scaffold.d.ts", "import": "./dist/scaffold.js" }
   },
   "files": [
-    "dist", "README.md", "SPEC.md", "ARCHITECTURE.md", "SECURITY.md", "REGISTRY.md",
+    "dist", "README.md", "SPEC.md", "ARCHITECTURE.md", "SECURITY.md", "REGISTRY.md", "ADOPTION.md",
     "capability-manifest.schema.json", "CHANGELOG.md", "capability-index.schema.json", "LICENSE"
   ],
   "sideEffects": false,
@@ -27,11 +30,12 @@
     "build": "npm run clean && tsc",
     "registry": "node scripts/generate-registry.mjs --write",
     "registry:check": "node scripts/generate-registry.mjs --check",
+    "registry:validate": "npm run build && node scripts/validate-registry.mjs",
     "test": "npm run build && npm run registry:check && node --test test/*.test.mjs",
     "check": "npm test && npm pack --dry-run",
     "clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\""
   },
-  "keywords": ["ai", "agents", "capabilities", "tools", "mcp", "automation", "permissions", "runtime", "discovery", "sandbox", "provenance"],
+  "keywords": ["ai", "agents", "capabilities", "tools", "mcp", "automation", "permissions", "runtime", "discovery", "sandbox", "provenance", "agent-tools", "developer-kit"],
   "license": "MIT",
   "repository": { "type": "git", "url": "git+https://github.com/wheresmycoleslaw/capability.git" },
   "bugs": { "url": "https://github.com/wheresmycoleslaw/capability/issues" },
@@ -81,6 +85,86 @@
           "input": { "type": "object", "properties": { "value": {}, "path": { "type": "string" } }, "required": ["value", "path"] },
           "output": { "type": "object", "properties": { "found": { "type": "boolean" }, "value": {} }, "required": ["found"] },
           "effects": [], "behavior": { "deterministic": true, "idempotent": true, "reversible": false }, "tags": ["json", "data", "path", "query"]
+        }
+      },
+      "capability/novelty-radar": {
+        "module": "./dist/builtins/capability-novelty-radar.js",
+        "manifest": {
+          "specVersion": "0.1", "id": "capability/novelty-radar", "version": "1.0.0", "name": "Capability Novelty Radar",
+          "description": "Measure whether a proposed capability is a functional twin, incremental variation, distinct design, or genuinely novel ecosystem contribution by comparing contracts, effects, tags, and purpose signals.",
+          "input": { "type": "object", "properties": { "proposed": { "type": "object" }, "existing": { "type": "array", "items": { "type": "object" } } }, "required": ["proposed", "existing"] },
+          "output": { "type": "object", "properties": { "uniquenessScore": { "type": "number" }, "classification": { "type": "string" }, "nearest": { "type": "array" }, "recommendation": { "type": "string" } }, "required": ["uniquenessScore", "classification", "nearest", "recommendation"] },
+          "effects": [], "behavior": { "deterministic": true, "idempotent": true, "reversible": false }, "tags": ["capability", "innovation", "novelty", "duplicate-detection", "ecosystem-design"]
+        }
+      },
+      "capability/authority-envelope": {
+        "module": "./dist/builtins/capability-authority-envelope.js",
+        "manifest": {
+          "specVersion": "0.1", "id": "capability/authority-envelope", "version": "1.0.0", "name": "Authority Envelope",
+          "description": "Compute the minimum visible authority surface of a capability set, expose over-declared permissions, and summarize reversibility and execution risk before an agent commits to a plan.",
+          "input": { "type": "object", "properties": { "manifests": { "type": "array", "items": { "type": "object" } }, "requiredEffects": { "type": "array", "items": { "type": "string" } } }, "required": ["manifests"] },
+          "output": { "type": "object", "properties": { "effects": { "type": "array" }, "openWorldEffects": { "type": "array" }, "overDeclaredEffects": { "type": "array" }, "perCapabilityOverDeclaration": { "type": "object" }, "riskScore": { "type": "number" }, "deterministic": { "type": "boolean" }, "fullyReversible": { "type": "boolean" } }, "required": ["effects", "openWorldEffects", "overDeclaredEffects", "perCapabilityOverDeclaration", "riskScore", "deterministic", "fullyReversible"] },
+          "effects": [], "behavior": { "deterministic": true, "idempotent": true, "reversible": false }, "tags": ["capability", "least-authority", "permissions", "risk", "planning"]
+        }
+      },
+      "capability/contract-router": {
+        "module": "./dist/builtins/capability-contract-router.js",
+        "manifest": {
+          "specVersion": "0.1", "id": "capability/contract-router", "version": "1.0.0", "name": "Contract Router",
+          "description": "Determine which downstream capabilities can consume an upstream result without guessing, and derive the exact safe projection of compatible fields for automatic composition.",
+          "input": { "type": "object", "properties": { "producerOutput": { "type": "object" }, "consumers": { "type": "array", "items": { "type": "object" } } }, "required": ["consumers"] },
+          "output": { "type": "array", "items": { "type": "object" } },
+          "effects": [], "behavior": { "deterministic": true, "idempotent": true, "reversible": false }, "tags": ["capability", "composition", "routing", "contracts", "schema"]
+        }
+      },
+      "capability/receipt-drift": {
+        "module": "./dist/builtins/capability-receipt-drift.js",
+        "manifest": {
+          "specVersion": "0.1", "id": "capability/receipt-drift", "version": "1.0.0", "name": "Receipt Drift Detector",
+          "description": "Detect behavioral, authority, and supply-chain drift between two executions, including the high-risk case where identical input produces different output under an apparently stable capability.",
+          "input": { "type": "object", "properties": { "baseline": { "type": "object" }, "current": { "type": "object" } }, "required": ["baseline", "current"] },
+          "output": { "type": "object", "properties": { "severity": { "type": "string" }, "reproducible": { "type": "boolean" }, "changes": { "type": "array" }, "score": { "type": "number" } }, "required": ["severity", "reproducible", "changes", "score"] },
+          "effects": [], "behavior": { "deterministic": true, "idempotent": true, "reversible": false }, "tags": ["capability", "receipts", "drift", "reproducibility", "supply-chain"]
+        }
+      },
+      "capability/failure-frontier": {
+        "module": "./dist/builtins/capability-failure-frontier.js",
+        "manifest": {
+          "specVersion": "0.1", "id": "capability/failure-frontier", "version": "1.0.0", "name": "Failure Frontier",
+          "description": "Locate the point of no return in a multi-capability plan, identify approval checkpoints, and quantify how much of the mutating path can be compensated or safely retried before execution starts.",
+          "input": { "type": "object", "properties": { "steps": { "type": "array", "items": { "type": "object" } } }, "required": ["steps"] },
+          "output": { "type": "object", "properties": { "pointOfNoReturn": {}, "approvalCheckpoints": { "type": "array" }, "retrySafePrefixLength": { "type": "number" }, "compensationCoverage": { "type": "number" }, "effects": { "type": "array" } }, "required": ["pointOfNoReturn", "approvalCheckpoints", "retrySafePrefixLength", "compensationCoverage", "effects"] },
+          "effects": [], "behavior": { "deterministic": true, "idempotent": true, "reversible": false }, "tags": ["capability", "planning", "rollback", "failure", "risk", "point-of-no-return"]
+        }
+      },
+      "capability/substitution-certificate": {
+        "module": "./dist/builtins/capability-substitution-certificate.js",
+        "manifest": {
+          "specVersion": "0.1", "id": "capability/substitution-certificate", "version": "1.0.0", "name": "Safe Substitution Certificate",
+          "description": "Certify whether one capability may replace another without expanding authority, weakening declared behavior, lowering trust, or breaking the conservative machine-readable contract.",
+          "input": { "type": "object", "properties": { "original": { "type": "object" }, "replacement": { "type": "object" }, "originalTrust": { "type": "object" }, "replacementTrust": { "type": "object" } }, "required": ["original", "replacement"] },
+          "output": { "type": "object", "properties": { "accepted": { "type": "boolean" }, "original": { "type": "object" }, "replacement": { "type": "object" }, "authorityDelta": { "type": "object" }, "behaviorRegressions": { "type": "array" }, "contractBreaking": { "type": "array" }, "trustRegression": { "type": "boolean" }, "reasons": { "type": "array" }, "certificate": { "type": "string" } }, "required": ["accepted", "original", "replacement", "authorityDelta", "behaviorRegressions", "contractBreaking", "trustRegression", "reasons", "certificate"] },
+          "effects": [], "behavior": { "deterministic": true, "idempotent": true, "reversible": false }, "tags": ["capability", "substitution", "hot-swap", "authority", "trust", "contract"]
+        }
+      },
+      "capability/contract-evolution": {
+        "module": "./dist/builtins/capability-contract-evolution.js",
+        "manifest": {
+          "specVersion": "0.1", "id": "capability/contract-evolution", "version": "1.0.0", "name": "Capability Contract Evolution Gate",
+          "description": "Classify whether a new capability version is safely substitutable by considering input/output compatibility, authority expansion, and behavioral guarantees that ordinary package versioning does not capture.",
+          "input": { "type": "object", "properties": { "previous": { "type": "object" }, "next": { "type": "object" } }, "required": ["previous", "next"] },
+          "output": { "type": "object", "properties": { "classification": { "type": "string" }, "semverRecommendation": { "type": "string" }, "substitution": { "type": "object" }, "changes": { "type": "array" } }, "required": ["classification", "semverRecommendation", "substitution", "changes"] },
+          "effects": [], "behavior": { "deterministic": true, "idempotent": true, "reversible": false }, "tags": ["capability", "versioning", "contract", "effects", "compatibility", "upgrade"]
+        }
+      },
+      "capability/dominance-resolver": {
+        "module": "./dist/builtins/capability-dominance-resolver.js",
+        "manifest": {
+          "specVersion": "0.1", "id": "capability/dominance-resolver", "version": "1.0.0", "name": "Capability Dominance Resolver",
+          "description": "Find the non-dominated frontier among interchangeable capabilities without hiding tradeoffs inside one score, preferring candidates that are no worse on authority risk, trust, determinism, and reversibility.",
+          "input": { "type": "object", "properties": { "candidates": { "type": "array", "items": { "type": "object" } } }, "required": ["candidates"] },
+          "output": { "type": "object", "properties": { "frontier": { "type": "array" }, "dominated": { "type": "array" } }, "required": ["frontier", "dominated"] },
+          "effects": [], "behavior": { "deterministic": true, "idempotent": true, "reversible": false }, "tags": ["capability", "pareto", "selection", "authority", "trust", "substitution"]
         }
       }
     }
