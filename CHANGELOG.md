@@ -7,13 +7,20 @@
 - live network novelty analysis through `cap novelty`
 - registry record generation through `cap registry-entry`
 - generated projects include strict TypeScript, runtime/package manifest drift tests, CI, tokenless trusted-publisher workflow, packaging checks, and federation instructions
-- new `capability/novelty-radar` invention for detecting functional twins before they pollute the ecosystem
-- new `capability/authority-envelope` invention for exposing excess authority and plan risk before execution
-- new `capability/contract-router` invention for deterministic capability chaining by contract rather than model guesswork
-- new `capability/receipt-drift` invention for detecting behavioral and supply-chain drift across executions
-- new `capability/failure-frontier` invention for locating points of no return, compensation coverage, and retry-safe prefixes in agent plans
-- new public `innovation` and `scaffold` API surfaces
-- adoption doctrine requiring materially differentiated contributions rather than duplicate wrappers
+- new `capability/novelty-radar` primitive for detecting likely functional twins before they pollute the ecosystem
+- new `capability/authority-envelope` primitive for exposing excess authority and aggregate plan risk before execution
+- new `capability/contract-router` primitive for deterministic capability chaining by contract rather than model guesswork
+- new `capability/receipt-drift` primitive for detecting behavioral, authority, verification and supply-chain drift across executions
+- new `capability/failure-frontier` primitive for locating points of no return, compensation coverage, approval checkpoints and retry-safe prefixes in agent plans
+- new `capability/substitution-certificate` primitive for certifying a replacement only when contract, authority, behavior guarantees and supplied trust posture do not regress
+- new `capability/contract-evolution` primitive for classifying capability upgrades using contract semantics, effects and behavioral guarantees rather than package shape alone
+- new `capability/dominance-resolver` primitive for preserving a Pareto frontier of interchangeable abilities across authority risk, trust, determinism and reversibility
+- new public `innovation`, `evolution` and `scaffold` API surfaces
+- automated registry contribution validation against exact third-party npm metadata and package integrity
+- registry duplicate/twin gating and contributor pull-request template
+- public adoption guide, contributor guide and static project landing page
+- post-release smoke workflow expanded to scaffold a clean-room adopter project and execute new agent-native capabilities through Node and Docker isolation
+- adoption doctrine requiring materially differentiated contributions rather than renamed wrappers
 
 ## 0.3.0
 
