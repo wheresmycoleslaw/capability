@@ -22,7 +22,7 @@ export default defineCapability<{ text: string; trim?: boolean; collapseWhitespa
     behavior: { deterministic: true, idempotent: true, reversible: false },
     tags: ["text", "normalize", "whitespace", "case"]
   },
-  execute(input) {
+  execute(input: { text: string; trim?: boolean; collapseWhitespace?: boolean; case?: "preserve" | "lower" | "upper" }) {
     let text = input.text;
     if (input.trim !== false) text = text.trim();
     if (input.collapseWhitespace !== false) text = text.replace(/\s+/g, " ");

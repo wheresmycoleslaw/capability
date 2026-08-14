@@ -1,7 +1,9 @@
 import { defineCapability } from "../define.js";
 import { sha256 } from "../utils.js";
 
-export default defineCapability<{ value: unknown }, { sha256: string }>({
+type HashInput = { value: unknown };
+
+export default defineCapability<HashInput, { sha256: string }>({
   manifest: {
     specVersion: "0.1",
     id: "data/sha256",
@@ -14,5 +16,5 @@ export default defineCapability<{ value: unknown }, { sha256: string }>({
     behavior: { deterministic: true, idempotent: true, reversible: false },
     tags: ["data", "hash", "sha256", "digest"]
   },
-  execute({ value }) { return { sha256: sha256(value) }; }
+  execute({ value }: HashInput) { return { sha256: sha256(value) }; }
 });

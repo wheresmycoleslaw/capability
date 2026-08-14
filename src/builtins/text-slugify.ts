@@ -1,6 +1,8 @@
 import { defineCapability } from "../define.js";
 
-export default defineCapability<{ text: string; separator?: string; lowercase?: boolean }, { slug: string }>({
+type SlugifyInput = { text: string; separator?: string; lowercase?: boolean };
+
+export default defineCapability<SlugifyInput, { slug: string }>({
   manifest: {
     specVersion: "0.1",
     id: "text/slugify",
@@ -17,7 +19,7 @@ export default defineCapability<{ text: string; separator?: string; lowercase?: 
     behavior: { deterministic: true, idempotent: true, reversible: false },
     tags: ["text", "slug", "url", "normalize"]
   },
-  execute({ text, separator = "-", lowercase = true }) {
+  execute({ text, separator = "-", lowercase = true }: SlugifyInput) {
     if (!separator || separator.length > 8 || /[A-Za-z0-9]/.test(separator)) throw new TypeError("separator must be 1-8 non-alphanumeric characters");
     let value = text.normalize("NFKD").replace(/[\u0300-\u036f]/g, "");
     if (lowercase) value = value.toLowerCase();

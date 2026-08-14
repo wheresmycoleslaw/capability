@@ -1,10 +1,10 @@
 import { defineCapability } from "../define.js";
 
-function segments(path: string): string[] {
-  return path.replace(/\[(\d+)\]/g, ".$1").split(".").filter(Boolean);
-}
+type JsonGetInput = { value: unknown; path: string };
 
-export default defineCapability<{ value: unknown; path: string }, { found: boolean; value?: unknown }>({
+function segments(path: string): string[] { return path.replace(/\[(\d+)\]/g, ".$1").split(".").filter(Boolean); }
+
+export default defineCapability<JsonGetInput, { found: boolean; value?: unknown }>({
   manifest: {
     specVersion: "0.1",
     id: "json/get",
@@ -17,7 +17,7 @@ export default defineCapability<{ value: unknown; path: string }, { found: boole
     behavior: { deterministic: true, idempotent: true, reversible: false },
     tags: ["json", "data", "path", "query"]
   },
-  execute({ value, path }) {
+  execute({ value, path }: JsonGetInput) {
     let current: unknown = value;
     for (const key of segments(path)) {
       if (current === null || typeof current !== "object" || !(key in current)) return { found: false };
