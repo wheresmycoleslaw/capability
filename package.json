@@ -29,6 +29,7 @@
     "build": "npm run clean && tsc",
     "registry": "node scripts/generate-registry.mjs --write",
     "registry:check": "node scripts/generate-registry.mjs --check",
+    "registry:validate": "npm run build && node scripts/validate-registry.mjs",
     "test": "npm run build && npm run registry:check && node --test test/*.test.mjs",
     "check": "npm test && npm pack --dry-run",
     "clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\""
@@ -41,7 +42,7 @@
   "publishConfig": { "access": "public" },
   "engines": { "node": ">=20" },
   "devDependencies": { "typescript": "^5.8.3", "@types/node": "^22.0.0" },
-  "bin": { "cap": "./dist/cli.js", "capability": "./dist/cli.js", "create-capability": "./dist/cli.js" },
+  "bin": { "cap": "./dist/cli.js", "capability": "./dist/cli.js" },
   "capability": {
     "specVersion": "0.1",
     "exports": {
