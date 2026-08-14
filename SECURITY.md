@@ -1,58 +1,96 @@
 # Security Model
 
-## Trust boundaries
+Capability treats manifests, indexes, packages and capability code as separate trust boundaries.
 
-A capability manifest is untrusted metadata until the package/source and execution environment are trusted.
+## Core invariants
 
-The reference runtime enforces declared-effect policy **before** execution. In-process execution does not prove that the implementation obeys its manifest.
+1. **Discovery is inert.** Searching public indexes does not install or import capability code.
+2. **Safe acquisition is inert.** The reference ecosystem path reads package metadata and module bytes but does not import the executable module into the host process.
+3. **Effects are declarations, not permission.** Runtime policy remains authoritative.
+4. **Plans are bound before execution.** Input, capability version and requested effects are fingerprinted and checked for drift.
+5. **Artifact trust and runtime isolation are independent.** A verified package still executes inside the selected boundary.
+6. **Receipts record what happened.** They do not prove semantic correctness by themselves.
 
-## Defaults
+## Public indexes
 
-`CapabilityRuntime` defaults to `denyAllPolicy`. Capabilities declaring no effects can run; capabilities declaring effects are denied until the application supplies a policy.
+Public index documents are untrusted discovery metadata. Package names, versions, manifests, repository URLs, integrity strings and federation links are attacker-controlled inputs until independently verified.
 
-`permissivePolicy` allows all declared effects but still requires explicit approval for mutating/open-world effects.
+Federation traversal is bounded by depth and maximum-index limits and de-duplicates visited URLs. A federation relationship does not transfer trust.
 
-## Plans
+## npm acquisition
 
-Plans bind capability ID/version, input hash, effects, and plan data into a fingerprint. Modified inputs or plans are rejected.
+`NpmPackageInstaller` installs exact package versions with lifecycle scripts disabled. Disabling scripts reduces acquisition-time execution but does not make package files trustworthy.
 
-This prevents accidental or opportunistic plan/execute drift inside the reference runtime. It is not a cryptographic signature from an external authority.
+`VerifiedNpmPackageInstaller` additionally runs npm registry signature/provenance verification and records observed package integrity, repository and commit metadata. `strictNpmTrustPolicy` requires exact package identity, package integrity, a verified registry signature and verified provenance before default ecosystem execution proceeds.
 
-## Receipts
+Verification is intentionally delegated to npm's package-verification machinery rather than reimplementing registry cryptography in this project.
 
-Receipts may contain input and output values. Applications handling secrets or regulated data SHOULD supply a custom receipt store that redacts, encrypts, or omits sensitive values.
+## Host-import prevention
 
-## Provenance
+The safe acquisition path uses `inspectModuleBackedCapability()`. It binds the inert manifest from `package.json` to a module path, verifies the module bytes when an integrity value is present, and returns a non-executable host stub. The module is loaded later by an executor boundary.
 
-`attachProvenance()` records observed source information. It does not itself verify npm attestations, Git commits, signatures, or organizations. Verify those with the relevant package/source system before treating provenance as trusted.
+`loadCapabilityFromPackage()` still exists for explicitly trusted/in-process applications. Do not use it for untrusted ecosystem acquisition.
 
-## Node permission sandbox
+## Package path containment
 
-`runInNodePermissionSandbox()` launches a separate Node process with `--permission`, grants only requested filesystem/process permissions, and does not inherit the parent environment by default.
+Module paths must begin with `./` and resolve inside the package root. Root escapes are rejected. The safe path requires full descriptor exports; a bare string module export cannot be inspected safely and is rejected.
 
-Important limitations:
+## Policies
 
-- Node describes its Permission Model as defense-in-depth for trusted code, not protection from malicious code.
-- Node 24 cannot restrict network access using the Permission Model. Node 25+ adds network permissions.
-- database clients, native extensions, OS syscalls, and non-Node executables can require stronger isolation.
-- allowing child processes materially weakens the boundary.
+`CapabilityRuntime` defaults to `denyAllPolicy`. Capabilities declaring no effects can run; declared effects require a host policy.
 
-Use containers, VMs, OS sandboxing, WASM, or remote workers for hostile/untrusted capability code.
+`permissivePolicy` allows declared effects but requires explicit approval for mutating or open-world effects including filesystem writes, network access, process spawning, secrets, database writes, email and Git mutations.
 
-## Reporting vulnerabilities
+A declared effect is never evidence that implementation behavior is limited to that effect. The executor must enforce the real boundary.
 
-Open a private GitHub security advisory for vulnerabilities. Do not publish exploit details in a public issue before a fix is available.
+## Docker executor
 
-## Package installation
+`DockerExecutor` is the stronger reference execution boundary. It uses:
 
-`NpmPackageInstaller` invokes npm with `--ignore-scripts`, `--no-save`, no lockfile, audit disabled and an exact package version. Disabling lifecycle scripts reduces acquisition-time execution but does **not** make package contents trusted. Capability modules execute later and remain subject to runtime policy and the selected execution boundary.
+- a read-only container root filesystem;
+- a read-only capability/install mount;
+- network disabled by default;
+- network enabled only for an authorized `network.connect` plan;
+- non-root UID/GID;
+- all Linux capabilities dropped;
+- `no-new-privileges`;
+- PID, memory and CPU limits;
+- a small temporary filesystem;
+- no inherited host environment by default;
+- explicit mounts only.
 
-Public index documents are untrusted discovery metadata. Treat package names, URLs, manifests, integrity strings and provenance claims as inputs to verification, not authority.
+Writable mounts require `filesystem.write` to be present in the plan. Containers still share the host kernel; high-assurance or hostile workloads may require stronger VM, microVM, WASM, remote-worker or OS-specific isolation.
 
-## Trust scores
+## Node Permission Model executor
 
-The built-in trust score is deterministic policy assistance, not a signature verifier. An attestation reference only increases the score because its presence was observed; hosts requiring cryptographic assurance MUST verify the attestation with the issuing ecosystem and attach only verified provenance.
+`NodePermissionExecutor` loads package code only in a child Node process under the Permission Model. It grants package read access and only effect-derived permissions configured by the host.
+
+The Node Permission Model is defense-in-depth, not a security boundary for malicious code. Network isolation is only considered strict when the running Node version can enforce it; otherwise `AutoIsolatedExecutor` requires Docker or refuses the strict fallback for no-network capabilities.
+
+Granting child-process access materially weakens the boundary. Hosts should avoid `process.spawn` for untrusted capabilities unless another outer isolation layer exists.
+
+## Lifecycle hooks
+
+For safely acquired module-backed capabilities, planning, execution, verification and rollback all run through the selected executor when those hooks exist. This avoids executing a supposedly harmless planning or verification hook in the host process before or after isolated execution.
+
+## Provenance and trust scores
+
+Provenance records observations. Fields such as registry-signature/provenance verification are set only after the configured verifier succeeds.
+
+The numeric trust score is policy assistance, not cryptographic proof. Hosts should prefer explicit requirements (`requireRegistrySignature`, `requireVerifiedProvenance`, allowlists, integrity requirements) over a score alone.
+
+## Receipts and sensitive data
+
+Receipts may include input and output values. Applications handling secrets, regulated information or personal data SHOULD provide a custom receipt store that redacts, encrypts, limits retention or omits sensitive values.
 
 ## OpenAPI imports
 
-OpenAPI documents can point at arbitrary servers. Imported operations always declare `network.connect`, but hosts SHOULD also restrict allowed destinations at the network/sandbox layer and SHOULD treat OpenAPI descriptions and schemas as untrusted metadata.
+OpenAPI documents are untrusted metadata and may point at arbitrary servers. Imported operations declare `network.connect`; hosts should additionally restrict destinations at the network/container/worker layer when origin control matters.
+
+## In-process escape hatch
+
+`InProcessExecutor` and CLI `--executor=in-process` intentionally import capability code into the host process. They are for code the host already trusts. The CLI makes this mode explicit and does not use it by default.
+
+## Reporting vulnerabilities
+
+Use a private GitHub security advisory for verification bypasses, registry poisoning, sandbox escapes, permission bypasses or other vulnerabilities. Do not publish working exploit details in a public issue before a fix is available.

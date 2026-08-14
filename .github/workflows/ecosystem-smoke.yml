@@ -1,0 +1,38 @@
+name: Ecosystem Smoke
+
+on:
+  workflow_dispatch:
+  workflow_run:
+    workflows: ["Publish"]
+    types: [completed]
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  live-ecosystem:
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 25
+          registry-url: https://registry.npmjs.org
+      - run: npm install --global npm@11
+      - name: Install released CLI
+        run: |
+          VERSION=$(cat .release)
+          npm install --global "@wheresmycoleslaw/capability@$VERSION"
+      - run: cap doctor
+      - run: cap find "normalize text"
+      - name: Execute through Node isolation
+        run: |
+          cap exec text/normalize '{"text":"  Hello   WORLD  ","case":"lower"}' --executor=node > /tmp/capability-result.json
+          grep -q 'hello world' /tmp/capability-result.json
+      - name: Execute through Docker isolation
+        run: |
+          docker pull node:24-alpine
+          cap exec text/slugify '{"text":"Capability Ecosystem"}' --executor=docker > /tmp/capability-docker.json
+          grep -q 'capability-ecosystem' /tmp/capability-docker.json

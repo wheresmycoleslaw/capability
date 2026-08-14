@@ -21,5 +21,11 @@ jobs:
           registry-url: https://registry.npmjs.org
       - run: npm install --ignore-scripts
       - run: npm test
+      - run: npm pack --dry-run
       - run: npm install --global npm@11
+      - name: Verify release marker
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          RELEASE=$(cat .release)
+          test "$VERSION" = "$RELEASE"
       - run: npm publish

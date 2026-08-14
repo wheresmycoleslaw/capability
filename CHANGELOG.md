@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.3.0
+
+- live default public registry seeded with effect-free capabilities
+- bounded federation across independently hosted capability indexes
+- `CapabilityHub` for discover → resolve → verify → acquire → isolated execute
+- safe inert acquisition path that does not import capability modules into the host process
+- exact npm artifact verification through registry signatures and provenance attestations
+- strict npm trust policy with package integrity and verified provenance requirements
+- Docker isolation executor with read-only filesystem, default-deny network, non-root execution, dropped capabilities and resource limits
+- Node Permission Model lifecycle executor for plan/execute/verify/rollback
+- auto-isolation executor selecting Docker first and strict Node fallback second
+- isolated lifecycle hooks so planning, verification and rollback do not escape the execution boundary
+- capability lockfiles pinning index digest, package identity and capability identity
+- public CLI commands: `find`, `info`, `install`, `exec`, `doctor`
+- built-in `text/normalize`, `text/slugify`, `data/sha256`, and `json/get` capabilities
+- public registry generation/check tooling to prevent package/index drift
+- package-root escape checks for module descriptors
+- package and module manifest binding across index, package metadata and installed artifact
+
 ## 0.2.0
 
 - public, mergeable capability index format and JSON Schema
@@ -31,3 +50,8 @@
 - optional Node Permission Model isolation helper
 - CLI for validate/inspect/plan/run/find/MCP/package operations
 - backwards-compatible 0.0.x definition path
+
+## 0.0.1
+
+- initial `defineCapability`, `inspectCapability`, and `runCapability` primitives
+- experimental specification skeleton
