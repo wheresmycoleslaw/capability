@@ -139,6 +139,9 @@ test("the checked-in public root registry validates", async () => {
     "capability/authority-envelope",
     "capability/contract-router",
     "capability/receipt-drift",
-    "capability/failure-frontier"
+    "capability/failure-frontier",
+    "capability/substitution-certificate",
+    "capability/contract-evolution",
+    "capability/dominance-resolver"
   ]));
 });
