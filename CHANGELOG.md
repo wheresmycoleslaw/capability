@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.4.0
+
+- one-command project scaffolding through `cap create`
+- publish-readiness scoring through `cap readiness`
+- live network novelty analysis through `cap novelty`
+- registry record generation through `cap registry-entry`
+- generated projects include strict TypeScript, runtime/package manifest drift tests, CI, tokenless trusted-publisher workflow, packaging checks, and federation instructions
+- new `capability/novelty-radar` invention for detecting functional twins before they pollute the ecosystem
+- new `capability/authority-envelope` invention for exposing excess authority and plan risk before execution
+- new `capability/contract-router` invention for deterministic capability chaining by contract rather than model guesswork
+- new `capability/receipt-drift` invention for detecting behavioral and supply-chain drift across executions
+- new `capability/failure-frontier` invention for locating points of no return, compensation coverage, and retry-safe prefixes in agent plans
+- new public `innovation` and `scaffold` API surfaces
+- adoption doctrine requiring materially differentiated contributions rather than duplicate wrappers
+
 ## 0.3.0
 
 - live default public registry seeded with effect-free capabilities

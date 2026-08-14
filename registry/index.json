@@ -1,6 +1,6 @@
 {
   "indexVersion": "0.1",
-  "generatedAt": "2026-08-14T03:55:00.000Z",
+  "generatedAt": "2026-08-14T17:47:00.000Z",
   "metadata": {
     "name": "Capability Public Registry",
     "maintainer": "wheresmycoleslaw",
@@ -10,12 +10,11 @@
   "packages": [
     {
       "name": "@wheresmycoleslaw/capability",
-      "version": "0.3.0",
+      "version": "0.4.0",
       "source": "npm",
       "repository": "https://github.com/wheresmycoleslaw/capability",
       "capabilities": [
         {
-          "module": "./dist/builtins/text-normalize.js",
           "manifest": {
             "specVersion": "0.1",
             "id": "text/normalize",
@@ -27,10 +26,10 @@
             "effects": [],
             "behavior": { "deterministic": true, "idempotent": true, "reversible": false },
             "tags": ["text", "normalize", "whitespace", "case"]
-          }
+          },
+          "module": "./dist/builtins/text-normalize.js"
         },
         {
-          "module": "./dist/builtins/text-slugify.js",
           "manifest": {
             "specVersion": "0.1",
             "id": "text/slugify",
@@ -42,10 +41,10 @@
             "effects": [],
             "behavior": { "deterministic": true, "idempotent": true, "reversible": false },
             "tags": ["text", "slug", "url", "normalize"]
-          }
+          },
+          "module": "./dist/builtins/text-slugify.js"
         },
         {
-          "module": "./dist/builtins/data-sha256.js",
           "manifest": {
             "specVersion": "0.1",
             "id": "data/sha256",
@@ -57,10 +56,10 @@
             "effects": [],
             "behavior": { "deterministic": true, "idempotent": true, "reversible": false },
             "tags": ["data", "hash", "sha256", "digest"]
-          }
+          },
+          "module": "./dist/builtins/data-sha256.js"
         },
         {
-          "module": "./dist/builtins/json-get.js",
           "manifest": {
             "specVersion": "0.1",
             "id": "json/get",
@@ -72,7 +71,83 @@
             "effects": [],
             "behavior": { "deterministic": true, "idempotent": true, "reversible": false },
             "tags": ["json", "data", "path", "query"]
-          }
+          },
+          "module": "./dist/builtins/json-get.js"
+        },
+        {
+          "manifest": {
+            "specVersion": "0.1",
+            "id": "capability/novelty-radar",
+            "version": "1.0.0",
+            "name": "Capability Novelty Radar",
+            "description": "Measure whether a proposed capability is a functional twin, incremental variation, distinct design, or genuinely novel ecosystem contribution by comparing contracts, effects, tags, and purpose signals.",
+            "input": { "type": "object", "properties": { "proposed": { "type": "object" }, "existing": { "type": "array", "items": { "type": "object" } } }, "required": ["proposed", "existing"] },
+            "output": { "type": "object", "properties": { "uniquenessScore": { "type": "number" }, "classification": { "type": "string" }, "nearest": { "type": "array" }, "recommendation": { "type": "string" } }, "required": ["uniquenessScore", "classification", "nearest", "recommendation"] },
+            "effects": [],
+            "behavior": { "deterministic": true, "idempotent": true, "reversible": false },
+            "tags": ["capability", "innovation", "novelty", "duplicate-detection", "ecosystem-design"]
+          },
+          "module": "./dist/builtins/capability-novelty-radar.js"
+        },
+        {
+          "manifest": {
+            "specVersion": "0.1",
+            "id": "capability/authority-envelope",
+            "version": "1.0.0",
+            "name": "Authority Envelope",
+            "description": "Compute the minimum visible authority surface of a capability set, expose over-declared permissions, and summarize reversibility and execution risk before an agent commits to a plan.",
+            "input": { "type": "object", "properties": { "manifests": { "type": "array", "items": { "type": "object" } }, "requiredEffects": { "type": "array", "items": { "type": "string" } } }, "required": ["manifests"] },
+            "output": { "type": "object", "properties": { "effects": { "type": "array" }, "openWorldEffects": { "type": "array" }, "overDeclaredEffects": { "type": "array" }, "perCapabilityOverDeclaration": { "type": "object" }, "riskScore": { "type": "number" }, "deterministic": { "type": "boolean" }, "fullyReversible": { "type": "boolean" } }, "required": ["effects", "openWorldEffects", "overDeclaredEffects", "perCapabilityOverDeclaration", "riskScore", "deterministic", "fullyReversible"] },
+            "effects": [],
+            "behavior": { "deterministic": true, "idempotent": true, "reversible": false },
+            "tags": ["capability", "least-authority", "permissions", "risk", "planning"]
+          },
+          "module": "./dist/builtins/capability-authority-envelope.js"
+        },
+        {
+          "manifest": {
+            "specVersion": "0.1",
+            "id": "capability/contract-router",
+            "version": "1.0.0",
+            "name": "Contract Router",
+            "description": "Determine which downstream capabilities can consume an upstream result without guessing, and derive the exact safe projection of compatible fields for automatic composition.",
+            "input": { "type": "object", "properties": { "producerOutput": { "type": "object" }, "consumers": { "type": "array", "items": { "type": "object" } } }, "required": ["consumers"] },
+            "output": { "type": "array", "items": { "type": "object" } },
+            "effects": [],
+            "behavior": { "deterministic": true, "idempotent": true, "reversible": false },
+            "tags": ["capability", "composition", "routing", "contracts", "schema"]
+          },
+          "module": "./dist/builtins/capability-contract-router.js"
+        },
+        {
+          "manifest": {
+            "specVersion": "0.1",
+            "id": "capability/receipt-drift",
+            "version": "1.0.0",
+            "name": "Receipt Drift Detector",
+            "description": "Detect behavioral, authority, and supply-chain drift between two executions, including the high-risk case where identical input produces different output under an apparently stable capability.",
+            "input": { "type": "object", "properties": { "baseline": { "type": "object" }, "current": { "type": "object" } }, "required": ["baseline", "current"] },
+            "output": { "type": "object", "properties": { "severity": { "type": "string" }, "reproducible": { "type": "boolean" }, "changes": { "type": "array" }, "score": { "type": "number" } }, "required": ["severity", "reproducible", "changes", "score"] },
+            "effects": [],
+            "behavior": { "deterministic": true, "idempotent": true, "reversible": false },
+            "tags": ["capability", "receipts", "drift", "reproducibility", "supply-chain"]
+          },
+          "module": "./dist/builtins/capability-receipt-drift.js"
+        },
+        {
+          "manifest": {
+            "specVersion": "0.1",
+            "id": "capability/failure-frontier",
+            "version": "1.0.0",
+            "name": "Failure Frontier",
+            "description": "Locate the point of no return in a multi-capability plan, identify approval checkpoints, and quantify how much of the mutating path can be compensated or safely retried before execution starts.",
+            "input": { "type": "object", "properties": { "steps": { "type": "array", "items": { "type": "object" } } }, "required": ["steps"] },
+            "output": { "type": "object", "properties": { "pointOfNoReturn": {}, "approvalCheckpoints": { "type": "array" }, "retrySafePrefixLength": { "type": "number" }, "compensationCoverage": { "type": "number" }, "effects": { "type": "array" } }, "required": ["pointOfNoReturn", "approvalCheckpoints", "retrySafePrefixLength", "compensationCoverage", "effects"] },
+            "effects": [],
+            "behavior": { "deterministic": true, "idempotent": true, "reversible": false },
+            "tags": ["capability", "planning", "rollback", "failure", "risk", "point-of-no-return"]
+          },
+          "module": "./dist/builtins/capability-failure-frontier.js"
         }
       ]
     }

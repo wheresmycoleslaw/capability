@@ -2,7 +2,7 @@
 
 **Executable abilities for agents: discover first, inspect and authorize before execution, verify what was acquired, and keep a receipt.**
 
-`@wheresmycoleslaw/capability` is an experimental TypeScript standard, runtime, CLI, and federated public index for self-describing executable capabilities.
+`@wheresmycoleslaw/capability` is an experimental TypeScript standard, runtime, CLI, developer kit, and federated public index for self-describing executable capabilities.
 
 ```text
 PUBLIC INDEX / FEDERATION
@@ -35,6 +35,23 @@ npm install @wheresmycoleslaw/capability
 ```
 
 Node 20+ is supported. For default isolated ecosystem execution, use Docker or Node 25+.
+
+## Create a capability
+
+The fastest adoption path is one command:
+
+```bash
+npx @wheresmycoleslaw/capability create my-capability --id my-domain/my-ability
+cd my-capability
+npm install
+npm test
+npm run readiness
+npm run novelty
+```
+
+The generated project includes a strict TypeScript implementation, inert package manifest, drift test, packaging checks, CI, tokenless trusted-publishing workflow, registry-entry generation, and live-network novelty analysis.
+
+See [ADOPTION.md](./ADOPTION.md) for the full zero-to-federation path.
 
 ## Try the live ecosystem
 
@@ -174,26 +191,43 @@ The Node Permission Model is defense-in-depth, not a hostile-code sandbox. Node 
 
 `PublicCapabilityIndex` performs inert lexical discovery. `EmbeddingRanker` provides a vendor-neutral hook for semantic ranking. `fetchCapabilityNetwork()` recursively follows bounded federation links and merges indexes without installing packages.
 
-## Interoperability
-
-- `createMcpAdapter()` projects registered capabilities as MCP tools while preserving runtime authorization.
-- `capabilitiesFromOpenApi()` imports OpenAPI 3.1 operations as capabilities declaring `network.connect`.
-- `composeCapabilities()` and `runPipeline()` support composition while preserving effects and receipts.
-
 ## Built-in seed capabilities
 
-The first live registry ships four effect-free capabilities inside this package:
+The live registry contains effect-free capabilities that prove the complete acquisition path and several new agent-native inventions:
 
 ```text
 text/normalize
 text/slugify
 data/sha256
 json/get
+
+capability/novelty-radar
+capability/authority-envelope
+capability/contract-router
+capability/receipt-drift
+capability/failure-frontier
 ```
 
-They exist to prove the complete discovery → acquisition → verification → isolated execution path without requiring an external service.
+The last five are deliberately not generic wrappers:
 
-## CLI
+- **Novelty Radar** detects functional twins before they enter the ecosystem.
+- **Authority Envelope** exposes excess permission and plan risk before execution.
+- **Contract Router** determines safe capability-to-capability chaining from contracts instead of model guesswork.
+- **Receipt Drift** detects behavioral, authority, and supply-chain drift between executions.
+- **Failure Frontier** finds the first irreversible mutation, compensation coverage, approval checkpoints, and retry-safe prefix of an agent plan.
+
+## Developer commands
+
+```text
+cap create <directory> [--name PACKAGE] [--id CAPABILITY-ID] [--description TEXT] [--repo URL] [--force]
+cap readiness [package.json]
+cap novelty <capability-id|manifest.json> [--package package.json] [--index URL]
+cap registry-entry [package.json] [--out PATH]
+```
+
+`cap novelty` is intentionally part of the normal publishing path. Capability does not need an ecosystem full of renamed copies of the same function; contributors are encouraged to improve an existing ability or occupy genuine whitespace.
+
+## Ecosystem commands
 
 ```text
 cap doctor [--index URL]
@@ -201,21 +235,13 @@ cap find <query> [--index URL] [--limit N]
 cap info <id-or-query> [--index URL]
 cap install <id-or-query> [--index URL] [--lock PATH]
 cap exec <id-or-query> <json-input> [--approve] [--index URL] [--executor auto|docker|node|in-process]
-
-cap validate <manifest.json>
-cap package <package.json>
-cap acquire <package.json> <capability-id>
-cap plan <package.json> <capability-id> <json-input>
-cap run <package.json> <capability-id> <json-input> [--approve]
-cap find-local <query> <package.json...>
-cap eval <package.json> <capability-id> <cases.json> [--approve]
-cap trust <package.json> <capability-id>
-cap index <output.json> <package.json...>
-cap openapi <openapi.json> [namespace]
-cap mcp-tools <package.json...>
 ```
 
-`--executor=in-process` is an explicit escape hatch for trusted code and imports executable code into the host process. It is not the ecosystem default.
+## Interoperability
+
+- `createMcpAdapter()` projects registered capabilities as MCP tools while preserving runtime authorization.
+- `capabilitiesFromOpenApi()` imports OpenAPI 3.1 operations as capabilities declaring `network.connect`.
+- `composeCapabilities()` and `runPipeline()` support composition while preserving effects and receipts.
 
 ## Registry participation
 
@@ -223,6 +249,7 @@ See [REGISTRY.md](./REGISTRY.md) to publish capabilities or federate an independ
 
 ## Documents
 
+- [Adoption guide](./ADOPTION.md)
 - [Specification](./SPEC.md)
 - [Architecture](./ARCHITECTURE.md)
 - [Security model](./SECURITY.md)
