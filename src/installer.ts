@@ -1,4 +1,4 @@
-import { access, mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { access, chmod, mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { spawn } from "node:child_process";
@@ -82,6 +82,7 @@ async function runCommand(command: string, args: readonly string[], timeoutMs: n
 
 async function ensureInstallRoot(root: string): Promise<void> {
   await mkdir(root, { recursive: true });
+  if (process.platform !== "win32") await chmod(root, 0o755);
   const packageJson = join(root, "package.json");
   try { await access(packageJson); }
   catch { await writeFile(packageJson, JSON.stringify({ name: "capability-acquisition", private: true, version: "0.0.0" }), "utf8"); }
@@ -100,7 +101,7 @@ export class NpmPackageInstaller implements CapabilityPackageInstaller {
     const view = JSON.parse(viewResult.stdout || "{}") as NpmView;
     if (view.name && view.name !== packageName) throw new Error(`npm resolved ${spec} to unexpected package ${view.name}`);
     if (view.version && view.version !== packageVersion) throw new Error(`npm resolved ${spec} to unexpected version ${view.version}`);
-    await runCommand(npm, ["install", "--ignore-scripts", "--package-lock=true", "--audit=false", "--fund=false", "--prefix", root, spec, ...registryArgs], timeout);
+    await runCommand(npm, ["install", "--ignore-scripts", "--save-exact", "--package-lock=true", "--audit=false", "--fund=false", "--prefix", root, spec, ...registryArgs], timeout);
     const packageJsonPath = packagePath(root, packageName);
     const installedJson = JSON.parse(await readFile(packageJsonPath, "utf8")) as { name?: string; version?: string };
     if (installedJson.name !== packageName || installedJson.version !== packageVersion) throw new Error(`Installed package identity mismatch: expected ${spec}, got ${installedJson.name}@${installedJson.version}`);

@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import { dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
@@ -17,7 +18,8 @@ import {
   loadCapabilityFromPackage,
   resolveCapabilityLock,
   resolveIndexedCapability,
-  strictNpmTrustPolicy
+  strictNpmTrustPolicy,
+  validateCapabilityIndex
 } from "../dist/index.js";
 
 const fixturePackageJson = fileURLToPath(new URL("./fixtures/package/package.json", import.meta.url));
@@ -122,4 +124,11 @@ test("indexed acquisition rejects a manifest that differs from selected inert me
   const poisoned = { ...selected, capability: { ...selected.capability, manifest: { ...selected.capability.manifest, description: "poisoned" } } };
   const installer = { async install(packageName, packageVersion) { return { root: fixtureRoot, packageJsonPath: fixturePackageJson, packageName, packageVersion }; } };
   await assert.rejects(() => acquireIndexedCapability(poisoned, { installer, trust: { requirePackage: true }, loadCode: false }), /does not match public index/);
+});
+
+test("the checked-in public root registry validates", async () => {
+  const document = JSON.parse(await readFile(new URL("../registry/index.json", import.meta.url), "utf8"));
+  assert.deepEqual(validateCapabilityIndex(document), []);
+  const ids = new PublicCapabilityIndex(document).discover("").map((entry) => entry.capability.manifest.id);
+  assert.deepEqual(new Set(ids), new Set(["text/normalize", "text/slugify", "data/sha256", "json/get"]));
 });
