@@ -8,6 +8,15 @@
   "properties": {
     "indexVersion": { "const": "0.1" },
     "generatedAt": { "type": "string", "format": "date-time" },
+    "federates": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": { "type": "string", "format": "uri", "pattern": "^https?://" }
+    },
+    "metadata": {
+      "type": "object",
+      "additionalProperties": { "type": "string" }
+    },
     "packages": {
       "type": "array",
       "items": {
@@ -19,6 +28,7 @@
           "version": { "type": "string", "minLength": 1 },
           "source": { "type": "string", "minLength": 1 },
           "repository": { "type": "string" },
+          "integrity": { "type": "string" },
           "capabilities": {
             "type": "array",
             "items": {

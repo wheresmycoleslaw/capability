@@ -1,0 +1,80 @@
+{
+  "indexVersion": "0.1",
+  "generatedAt": "2026-08-14T03:55:00.000Z",
+  "metadata": {
+    "name": "Capability Public Registry",
+    "maintainer": "wheresmycoleslaw",
+    "repository": "https://github.com/wheresmycoleslaw/capability"
+  },
+  "federates": [],
+  "packages": [
+    {
+      "name": "@wheresmycoleslaw/capability",
+      "version": "0.3.0",
+      "source": "npm",
+      "repository": "https://github.com/wheresmycoleslaw/capability",
+      "capabilities": [
+        {
+          "module": "./dist/builtins/text-normalize.js",
+          "manifest": {
+            "specVersion": "0.1",
+            "id": "text/normalize",
+            "version": "1.0.0",
+            "name": "Normalize Text",
+            "description": "Normalize whitespace, surrounding space, and letter case in text without network or filesystem access.",
+            "input": { "type": "object", "properties": { "text": { "type": "string" }, "trim": { "type": "boolean" }, "collapseWhitespace": { "type": "boolean" }, "case": { "type": "string", "enum": ["preserve", "lower", "upper"] } }, "required": ["text"] },
+            "output": { "type": "object", "properties": { "text": { "type": "string" } }, "required": ["text"] },
+            "effects": [],
+            "behavior": { "deterministic": true, "idempotent": true, "reversible": false },
+            "tags": ["text", "normalize", "whitespace", "case"]
+          }
+        },
+        {
+          "module": "./dist/builtins/text-slugify.js",
+          "manifest": {
+            "specVersion": "0.1",
+            "id": "text/slugify",
+            "version": "1.0.0",
+            "name": "Slugify Text",
+            "description": "Convert text to a deterministic URL-friendly slug without external effects.",
+            "input": { "type": "object", "properties": { "text": { "type": "string" }, "separator": { "type": "string" }, "lowercase": { "type": "boolean" } }, "required": ["text"] },
+            "output": { "type": "object", "properties": { "slug": { "type": "string" } }, "required": ["slug"] },
+            "effects": [],
+            "behavior": { "deterministic": true, "idempotent": true, "reversible": false },
+            "tags": ["text", "slug", "url", "normalize"]
+          }
+        },
+        {
+          "module": "./dist/builtins/data-sha256.js",
+          "manifest": {
+            "specVersion": "0.1",
+            "id": "data/sha256",
+            "version": "1.0.0",
+            "name": "Stable SHA-256",
+            "description": "Compute a deterministic SHA-256 digest of a structured JSON-compatible value.",
+            "input": { "type": "object", "properties": { "value": {} }, "required": ["value"] },
+            "output": { "type": "object", "properties": { "sha256": { "type": "string" } }, "required": ["sha256"] },
+            "effects": [],
+            "behavior": { "deterministic": true, "idempotent": true, "reversible": false },
+            "tags": ["data", "hash", "sha256", "digest"]
+          }
+        },
+        {
+          "module": "./dist/builtins/json-get.js",
+          "manifest": {
+            "specVersion": "0.1",
+            "id": "json/get",
+            "version": "1.0.0",
+            "name": "Get JSON Path",
+            "description": "Read a dot/bracket path from structured data without executing expressions or accessing external resources.",
+            "input": { "type": "object", "properties": { "value": {}, "path": { "type": "string" } }, "required": ["value", "path"] },
+            "output": { "type": "object", "properties": { "found": { "type": "boolean" }, "value": {} }, "required": ["found"] },
+            "effects": [],
+            "behavior": { "deterministic": true, "idempotent": true, "reversible": false },
+            "tags": ["json", "data", "path", "query"]
+          }
+        }
+      ]
+    }
+  ]
+}

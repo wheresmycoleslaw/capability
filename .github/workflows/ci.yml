@@ -10,8 +10,9 @@ permissions:
 jobs:
   test:
     strategy:
+      fail-fast: false
       matrix:
-        node: [22, 24]
+        node: [22, 24, 25]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -31,4 +32,39 @@ jobs:
           node-version: 20
       - run: npm install --ignore-scripts
       - run: npm run build
+      - run: npm run registry:check
       - run: npm pack --dry-run
+
+  npm-verification:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: npm install --ignore-scripts
+      - run: npm run build
+      - run: npm install --global npm@11
+      - name: Verify a previously provenance-published package
+        run: |
+          node --input-type=module <<'NODE'
+          import { VerifiedNpmPackageInstaller } from './dist/index.js';
+          const installed = await new VerifiedNpmPackageInstaller().install('@wheresmycoleslaw/capability', '0.2.0');
+          if (!installed.verification?.registrySignatureVerified) throw new Error('registry signature was not verified');
+          if (!installed.verification?.provenanceVerified) throw new Error('npm provenance was not verified');
+          console.log(JSON.stringify(installed.verification));
+          NODE
+
+  docker-isolation:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: npm install --ignore-scripts
+      - run: npm run build
+      - run: docker pull node:24-alpine
+      - run: node --test test/docker.test.mjs
+        env:
+          CAPABILITY_DOCKER_TEST: "1"

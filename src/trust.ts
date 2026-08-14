@@ -5,14 +5,31 @@ export type CapabilityTrustPolicy = {
   minScore?: number;
   requirePackage?: boolean;
   requireIntegrity?: boolean;
+  requirePackageIntegrity?: boolean;
   requireRepository?: boolean;
   requireCommit?: boolean;
   requireAttestation?: boolean;
+  requireRegistrySignature?: boolean;
+  requireVerifiedProvenance?: boolean;
   allowedPackages?: readonly string[];
   allowedRepositories?: readonly string[];
 };
 
-export type CapabilityTrustAssessment = { score: number; accepted: boolean; reasons: readonly string[]; failures: readonly string[]; provenance?: Readonly<CapabilityProvenance> };
+export type CapabilityTrustAssessment = {
+  score: number;
+  accepted: boolean;
+  reasons: readonly string[];
+  failures: readonly string[];
+  provenance?: Readonly<CapabilityProvenance>;
+};
+
+export const strictNpmTrustPolicy: Readonly<CapabilityTrustPolicy> = Object.freeze({
+  minScore: 80,
+  requirePackage: true,
+  requirePackageIntegrity: true,
+  requireRegistrySignature: true,
+  requireVerifiedProvenance: true
+});
 
 function matchAllowed(value: string | undefined, allowed: readonly string[] | undefined): boolean {
   if (!allowed?.length) return true;
@@ -27,16 +44,23 @@ export function assessCapabilityTrust(capability: Capability, policy: Capability
   let score = 10;
   if (provenance?.source) { score += 10; reasons.push("source observed"); }
   if (provenance?.packageName && provenance.packageVersion) { score += 20; reasons.push("package identity observed"); }
-  if (provenance?.integrity) { score += 25; reasons.push("integrity recorded"); }
+  if (provenance?.integrity) { score += 25; reasons.push("module integrity recorded"); }
   if (provenance?.repository) { score += 10; reasons.push("repository recorded"); }
-  if (provenance?.commit) { score += 10; reasons.push("commit recorded"); }
-  if (provenance?.attestation) { score += 15; reasons.push("attestation recorded"); }
+  if (provenance?.commit) { score += 10; reasons.push("source commit recorded"); }
+  if (provenance?.attestation) { score += 15; reasons.push("attestation reference recorded"); }
+  if (provenance?.packageIntegrity) { score += 10; reasons.push("package integrity recorded"); }
+  if (provenance?.registrySignatureVerified) { score += 10; reasons.push("registry signature verified"); }
+  if (provenance?.provenanceVerified) { score += 15; reasons.push("provenance attestation verified"); }
   score = Math.min(100, score);
+
   if (policy.requirePackage && !(provenance?.packageName && provenance.packageVersion)) failures.push("package identity required");
-  if (policy.requireIntegrity && !provenance?.integrity) failures.push("integrity required");
+  if (policy.requireIntegrity && !provenance?.integrity) failures.push("module integrity required");
+  if (policy.requirePackageIntegrity && !provenance?.packageIntegrity) failures.push("package integrity required");
   if (policy.requireRepository && !provenance?.repository) failures.push("repository required");
   if (policy.requireCommit && !provenance?.commit) failures.push("commit required");
   if (policy.requireAttestation && !provenance?.attestation) failures.push("attestation required");
+  if (policy.requireRegistrySignature && provenance?.registrySignatureVerified !== true) failures.push("verified registry signature required");
+  if (policy.requireVerifiedProvenance && provenance?.provenanceVerified !== true) failures.push("verified provenance attestation required");
   if (!matchAllowed(provenance?.packageName, policy.allowedPackages)) failures.push("package is not allowed");
   if (!matchAllowed(provenance?.repository, policy.allowedRepositories)) failures.push("repository is not allowed");
   if (score < (policy.minScore ?? 0)) failures.push(`trust score ${score} is below minimum ${policy.minScore}`);

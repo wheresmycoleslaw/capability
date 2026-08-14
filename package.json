@@ -1,7 +1,7 @@
 {
   "name": "@wheresmycoleslaw/capability",
-  "version": "0.2.0",
-  "description": "A standard and runtime for self-describing executable capabilities for AI agents.",
+  "version": "0.3.0",
+  "description": "A standard, runtime, and federated ecosystem for safely discoverable executable capabilities for AI agents.",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -13,20 +13,25 @@
     "./evals": { "types": "./dist/evals.d.ts", "import": "./dist/evals.js" },
     "./trust": { "types": "./dist/trust.d.ts", "import": "./dist/trust.js" },
     "./public-index": { "types": "./dist/public-index.d.ts", "import": "./dist/public-index.js" },
-    "./installer": { "types": "./dist/installer.d.ts", "import": "./dist/installer.js" }
+    "./installer": { "types": "./dist/installer.d.ts", "import": "./dist/installer.js" },
+    "./ecosystem": { "types": "./dist/ecosystem.d.ts", "import": "./dist/ecosystem.js" },
+    "./docker": { "types": "./dist/docker.d.ts", "import": "./dist/docker.js" },
+    "./lockfile": { "types": "./dist/lockfile.d.ts", "import": "./dist/lockfile.js" }
   },
   "files": [
-    "dist", "README.md", "SPEC.md", "ARCHITECTURE.md", "SECURITY.md",
+    "dist", "README.md", "SPEC.md", "ARCHITECTURE.md", "SECURITY.md", "REGISTRY.md",
     "capability-manifest.schema.json", "CHANGELOG.md", "capability-index.schema.json", "LICENSE"
   ],
   "sideEffects": false,
   "scripts": {
     "build": "npm run clean && tsc",
-    "test": "npm run build && node --test test/*.test.mjs",
+    "registry": "node scripts/generate-registry.mjs --write",
+    "registry:check": "node scripts/generate-registry.mjs --check",
+    "test": "npm run build && npm run registry:check && node --test test/*.test.mjs",
     "check": "npm test && npm pack --dry-run",
     "clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\""
   },
-  "keywords": ["ai", "agents", "capabilities", "tools", "mcp", "automation", "permissions", "runtime", "discovery"],
+  "keywords": ["ai", "agents", "capabilities", "tools", "mcp", "automation", "permissions", "runtime", "discovery", "sandbox", "provenance"],
   "license": "MIT",
   "repository": { "type": "git", "url": "git+https://github.com/wheresmycoleslaw/capability.git" },
   "bugs": { "url": "https://github.com/wheresmycoleslaw/capability/issues" },
@@ -34,5 +39,50 @@
   "publishConfig": { "access": "public" },
   "engines": { "node": ">=20" },
   "devDependencies": { "typescript": "^5.8.3", "@types/node": "^22.0.0" },
-  "bin": { "cap": "./dist/cli.js", "capability": "./dist/cli.js" }
+  "bin": { "cap": "./dist/cli.js", "capability": "./dist/cli.js" },
+  "capability": {
+    "specVersion": "0.1",
+    "exports": {
+      "text/normalize": {
+        "module": "./dist/builtins/text-normalize.js",
+        "manifest": {
+          "specVersion": "0.1", "id": "text/normalize", "version": "1.0.0", "name": "Normalize Text",
+          "description": "Normalize whitespace, surrounding space, and letter case in text without network or filesystem access.",
+          "input": { "type": "object", "properties": { "text": { "type": "string" }, "trim": { "type": "boolean" }, "collapseWhitespace": { "type": "boolean" }, "case": { "type": "string", "enum": ["preserve", "lower", "upper"] } }, "required": ["text"] },
+          "output": { "type": "object", "properties": { "text": { "type": "string" } }, "required": ["text"] },
+          "effects": [], "behavior": { "deterministic": true, "idempotent": true, "reversible": false }, "tags": ["text", "normalize", "whitespace", "case"]
+        }
+      },
+      "text/slugify": {
+        "module": "./dist/builtins/text-slugify.js",
+        "manifest": {
+          "specVersion": "0.1", "id": "text/slugify", "version": "1.0.0", "name": "Slugify Text",
+          "description": "Convert text to a deterministic URL-friendly slug without external effects.",
+          "input": { "type": "object", "properties": { "text": { "type": "string" }, "separator": { "type": "string" }, "lowercase": { "type": "boolean" } }, "required": ["text"] },
+          "output": { "type": "object", "properties": { "slug": { "type": "string" } }, "required": ["slug"] },
+          "effects": [], "behavior": { "deterministic": true, "idempotent": true, "reversible": false }, "tags": ["text", "slug", "url", "normalize"]
+        }
+      },
+      "data/sha256": {
+        "module": "./dist/builtins/data-sha256.js",
+        "manifest": {
+          "specVersion": "0.1", "id": "data/sha256", "version": "1.0.0", "name": "Stable SHA-256",
+          "description": "Compute a deterministic SHA-256 digest of a structured JSON-compatible value.",
+          "input": { "type": "object", "properties": { "value": {} }, "required": ["value"] },
+          "output": { "type": "object", "properties": { "sha256": { "type": "string" } }, "required": ["sha256"] },
+          "effects": [], "behavior": { "deterministic": true, "idempotent": true, "reversible": false }, "tags": ["data", "hash", "sha256", "digest"]
+        }
+      },
+      "json/get": {
+        "module": "./dist/builtins/json-get.js",
+        "manifest": {
+          "specVersion": "0.1", "id": "json/get", "version": "1.0.0", "name": "Get JSON Path",
+          "description": "Read a dot/bracket path from structured data without executing expressions or accessing external resources.",
+          "input": { "type": "object", "properties": { "value": {}, "path": { "type": "string" } }, "required": ["value", "path"] },
+          "output": { "type": "object", "properties": { "found": { "type": "boolean" }, "value": {} }, "required": ["found"] },
+          "effects": [], "behavior": { "deterministic": true, "idempotent": true, "reversible": false }, "tags": ["json", "data", "path", "query"]
+        }
+      }
+    }
+  }
 }

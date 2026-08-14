@@ -5,11 +5,25 @@ import { validateManifest } from "./manifest.js";
 export const CAPABILITY_INDEX_VERSION = "0.1" as const;
 
 export type PublicIndexCapability = { manifest: CapabilityManifest; module: string; integrity?: string };
-export type PublicIndexPackage = { name: string; version: string; source: string; repository?: string; capabilities: readonly PublicIndexCapability[] };
-export type CapabilityIndexDocument = { indexVersion: typeof CAPABILITY_INDEX_VERSION; generatedAt: string; packages: readonly PublicIndexPackage[] };
+export type PublicIndexPackage = {
+  name: string;
+  version: string;
+  source: string;
+  repository?: string;
+  integrity?: string;
+  capabilities: readonly PublicIndexCapability[];
+};
+export type CapabilityIndexDocument = {
+  indexVersion: typeof CAPABILITY_INDEX_VERSION;
+  generatedAt: string;
+  packages: readonly PublicIndexPackage[];
+  federates?: readonly string[];
+  metadata?: Readonly<Record<string, string>>;
+};
 export type PublicIndexResult = { package: PublicIndexPackage; capability: PublicIndexCapability; score: number; reasons: readonly string[] };
 
 function tokens(value: string): string[] { return value.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean); }
+function validUrl(value: string): boolean { try { const url = new URL(value); return url.protocol === "https:" || url.protocol === "http:"; } catch { return false; } }
 
 export function validateCapabilityIndex(value: unknown): string[] {
   if (!value || typeof value !== "object") return ["index must be an object"];
@@ -17,6 +31,11 @@ export function validateCapabilityIndex(value: unknown): string[] {
   const issues: string[] = [];
   if (index.indexVersion !== CAPABILITY_INDEX_VERSION) issues.push(`indexVersion must be ${CAPABILITY_INDEX_VERSION}`);
   if (typeof index.generatedAt !== "string" || Number.isNaN(Date.parse(index.generatedAt))) issues.push("generatedAt must be an ISO date string");
+  if (index.federates !== undefined) {
+    if (!Array.isArray(index.federates)) issues.push("federates must be an array");
+    else for (const [i, url] of index.federates.entries()) if (typeof url !== "string" || !validUrl(url)) issues.push(`federates[${i}] must be an http(s) URL`);
+  }
+  if (index.metadata !== undefined && (!index.metadata || typeof index.metadata !== "object" || Array.isArray(index.metadata))) issues.push("metadata must be an object");
   if (!Array.isArray(index.packages)) return [...issues, "packages must be an array"];
   for (const [packageIndex, pkg] of index.packages.entries()) {
     if (!pkg || typeof pkg !== "object") { issues.push(`packages[${packageIndex}] must be an object`); continue; }
@@ -24,19 +43,32 @@ export function validateCapabilityIndex(value: unknown): string[] {
     if (typeof p.name !== "string" || !p.name) issues.push(`packages[${packageIndex}].name is required`);
     if (typeof p.version !== "string" || !p.version) issues.push(`packages[${packageIndex}].version is required`);
     if (typeof p.source !== "string" || !p.source) issues.push(`packages[${packageIndex}].source is required`);
+    if (p.repository !== undefined && typeof p.repository !== "string") issues.push(`packages[${packageIndex}].repository must be a string`);
+    if (p.integrity !== undefined && typeof p.integrity !== "string") issues.push(`packages[${packageIndex}].integrity must be a string`);
     if (!Array.isArray(p.capabilities)) { issues.push(`packages[${packageIndex}].capabilities must be an array`); continue; }
     for (const [capIndex, cap] of p.capabilities.entries()) {
       if (!cap || typeof cap !== "object") { issues.push(`packages[${packageIndex}].capabilities[${capIndex}] must be an object`); continue; }
       const c = cap as Record<string, unknown>;
       if (typeof c.module !== "string" || !c.module.startsWith("./")) issues.push(`packages[${packageIndex}].capabilities[${capIndex}].module must be package-relative`);
+      if (c.integrity !== undefined && typeof c.integrity !== "string") issues.push(`packages[${packageIndex}].capabilities[${capIndex}].integrity must be a string`);
       issues.push(...validateManifest(c.manifest).map((issue) => `packages[${packageIndex}].capabilities[${capIndex}]: ${issue}`));
     }
   }
   return issues;
 }
 
-export function createCapabilityIndex(packages: readonly PublicIndexPackage[], now = new Date()): CapabilityIndexDocument {
-  const document: CapabilityIndexDocument = { indexVersion: CAPABILITY_INDEX_VERSION, generatedAt: now.toISOString(), packages };
+export function createCapabilityIndex(
+  packages: readonly PublicIndexPackage[],
+  now = new Date(),
+  options: { federates?: readonly string[]; metadata?: Readonly<Record<string, string>> } = {}
+): CapabilityIndexDocument {
+  const document: CapabilityIndexDocument = {
+    indexVersion: CAPABILITY_INDEX_VERSION,
+    generatedAt: now.toISOString(),
+    packages,
+    ...(options.federates?.length ? { federates: [...new Set(options.federates)] } : {}),
+    ...(options.metadata ? { metadata: { ...options.metadata } } : {})
+  };
   const issues = validateCapabilityIndex(document);
   if (issues.length) throw new TypeError(issues.join("; "));
   return document;
@@ -44,12 +76,18 @@ export function createCapabilityIndex(packages: readonly PublicIndexPackage[], n
 
 export function mergeCapabilityIndexes(...indexes: readonly CapabilityIndexDocument[]): CapabilityIndexDocument {
   const packages = new Map<string, PublicIndexPackage>();
+  const federates = new Set<string>();
   for (const index of indexes) {
     const issues = validateCapabilityIndex(index);
     if (issues.length) throw new TypeError(issues.join("; "));
     for (const pkg of index.packages) packages.set(`${pkg.name}@${pkg.version}`, pkg);
+    for (const url of index.federates ?? []) federates.add(url);
   }
-  return createCapabilityIndex([...packages.values()].sort((a, b) => `${a.name}@${a.version}`.localeCompare(`${b.name}@${b.version}`)));
+  return createCapabilityIndex(
+    [...packages.values()].sort((a, b) => `${a.name}@${a.version}`.localeCompare(`${b.name}@${b.version}`)),
+    new Date(),
+    { federates: [...federates] }
+  );
 }
 
 export class PublicCapabilityIndex {
@@ -63,7 +101,7 @@ export class PublicCapabilityIndex {
   addPackage(pkg: PublicIndexPackage): this {
     const map = new Map(this.document.packages.map((item) => [`${item.name}@${item.version}`, item]));
     map.set(`${pkg.name}@${pkg.version}`, pkg);
-    this.document = createCapabilityIndex([...map.values()]);
+    this.document = createCapabilityIndex([...map.values()], new Date(), { federates: this.document.federates, metadata: this.document.metadata });
     return this;
   }
   discover(query: DiscoveryQuery | string): PublicIndexResult[] {
