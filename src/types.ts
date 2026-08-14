@@ -172,12 +172,19 @@ export type ExecutionOptions = {
 
 export type CapabilityProvenance = {
   source?: string;
+  packageRoot?: string;
+  installRoot?: string;
   packageName?: string;
   packageVersion?: string;
+  packageIntegrity?: string;
   repository?: string;
   commit?: string;
   integrity?: string;
   attestation?: string;
+  registrySignatureVerified?: boolean;
+  provenanceVerified?: boolean;
+  verificationProvider?: string;
+  verifiedAt?: string;
 };
 
 export type DiscoveryRanker = {
