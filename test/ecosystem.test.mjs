@@ -129,7 +129,7 @@ test("indexed acquisition rejects a manifest that differs from selected inert me
 test("the checked-in public root registry validates", async () => {
   const document = JSON.parse(await readFile(new URL("../registry/index.json", import.meta.url), "utf8"));
   assert.deepEqual(validateCapabilityIndex(document), []);
-  const ids = new PublicCapabilityIndex(document).discover("").map((entry) => entry.capability.manifest.id);
+  const ids = new PublicCapabilityIndex(document).discover({ text: "", limit: 50 }).map((entry) => entry.capability.manifest.id);
   assert.deepEqual(new Set(ids), new Set([
     "text/normalize",
     "text/slugify",
