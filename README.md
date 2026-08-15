@@ -36,6 +36,28 @@ npm install @wheresmycoleslaw/capability
 
 Node 20+ is supported. For default isolated ecosystem execution, use Docker or Node 25+.
 
+## Bootstrap discovery
+
+Capability can now be found and entered from outside its own ecosystem instead of assuming the client already knows the protocol.
+
+**From an MCP host:**
+
+```bash
+npx -y @wheresmycoleslaw/capability mcp-serve
+```
+
+The bridge gives the agent five stable tools—search, inspect, execute, website probe, and doctor—without dumping the entire Capability network into the model context.
+
+**From a website:**
+
+Participating sites advertise one or more indexes at `/.well-known/capabilities` (or the `.json` fallback). Probe one with:
+
+```bash
+cap probe https://example.com
+```
+
+See [DISCOVERY.md](./DISCOVERY.md) for the bootstrap architecture and site descriptor format.
+
 ## Create a capability
 
 The fastest adoption path is one command:

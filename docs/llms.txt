@@ -1,0 +1,63 @@
+# Capability
+
+Capability is an open experimental standard, runtime, CLI, developer kit, and federated discovery network for executable abilities that software agents can discover before installation, inspect before execution, authorize by declared effects, acquire with provenance checks, run through isolation, verify, and receipt.
+
+Canonical repository: https://github.com/wheresmycoleslaw/capability
+npm package: @wheresmycoleslaw/capability
+Public documentation: https://sithix.com/capability
+Default index: https://raw.githubusercontent.com/wheresmycoleslaw/capability/main/registry/index.json
+
+## Bootstrap an MCP host
+
+Run:
+
+npx -y @wheresmycoleslaw/capability mcp-serve
+
+The bridge exposes five stable MCP tools:
+- capability_search: discover abilities on demand
+- capability_inspect: inspect inert contracts and declared effects
+- capability_execute: verified acquisition and isolated execution
+- capability_probe_site: discover indexes advertised by a website
+- capability_doctor: local/network readiness check
+
+The MCP bridge supports modern MCP server/discover negotiation and the legacy initialize flow for compatibility.
+
+## Discover a website
+
+Participating websites advertise a JSON discovery document at:
+- /.well-known/capabilities
+- /.well-known/capabilities.json
+
+The document points to one or more Capability indexes and may advertise an MCP bootstrap endpoint or package. The document is a locator, not a trust root.
+
+CLI:
+cap probe https://example.com
+
+## Discover abilities
+
+cap find "desired outcome"
+cap info capability/id
+cap exec capability/id '{"input":"value"}' --executor=auto
+
+Capability indexes are inert discovery metadata. The client still verifies the exact executable package and manifest binding before execution.
+
+## Build an ability
+
+npx @wheresmycoleslaw/capability create my-capability --id my-domain/my-ability
+cd my-capability
+npm install
+npm test
+npm run readiness
+npm run novelty
+
+## Key design distinction
+
+MCP answers how an agent communicates with tools. Capability focuses on how an agent discovers an ability it was not prewired with, inspects it, resolves an exact implementation, verifies/acquires it, authorizes its effects, executes it in isolation, and records a receipt.
+
+## Documents
+- README.md: project overview
+- SPEC.md: protocol/data model
+- DISCOVERY.md: bootstrap and network discovery architecture
+- SECURITY.md: trust and isolation model
+- REGISTRY.md: federation and contribution model
+- ADOPTION.md: developer onboarding

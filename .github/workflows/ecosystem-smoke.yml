@@ -26,6 +26,21 @@ jobs:
           VERSION=$(cat .release)
           npm install --global "@wheresmycoleslaw/capability@$VERSION"
       - run: cap doctor
+      - name: Probe the public web bootstrap
+        run: |
+          cap probe https://sithix.com > /tmp/site.json
+          grep -q '"capabilityDiscoveryVersion": "0.1"' /tmp/site.json
+          grep -q '"name": "@wheresmycoleslaw/capability"' /tmp/site.json
+          grep -q 'raw.githubusercontent.com/wheresmycoleslaw/capability/main/registry/index.json' /tmp/site.json
+      - name: Bootstrap through MCP without preloading the network
+        run: |
+          printf '%s\n' \
+            '{"jsonrpc":"2.0","id":1,"method":"server/discover","params":{}}' \
+            '{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}' \
+            | cap mcp-serve > /tmp/mcp.jsonl
+          grep -q '2026-07-28' /tmp/mcp.jsonl
+          grep -q 'capability_search' /tmp/mcp.jsonl
+          grep -q 'capability_probe_site' /tmp/mcp.jsonl
       - name: Discover new agent-native capability
         run: |
           cap find "failure frontier" > /tmp/capability-find.json

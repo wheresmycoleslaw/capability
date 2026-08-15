@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.5.0
+
+- bootstrap discovery layer so developers and agents can find Capability before already knowing about it
+- `/.well-known/capabilities` website discovery convention and JSON Schema
+- `cap probe <site>` for zero-configuration domain discovery
+- executable `cap mcp-serve` bootstrap bridge exposing network search, inspection, verified isolated execution, website probing, and readiness checks
+- MCP compatibility across modern `server/discover` negotiation and legacy `initialize` clients
+- machine-readable `llms.txt` discovery guide
+- public SITHIX landing page and search-engine bootstrap surface
+- live registry moved to the 0.5.0 package artifact after release
+
 ## 0.4.0
 
 - one-command project scaffolding through `cap create`
