@@ -24,13 +24,13 @@ npx @wheresmycoleslaw/capability create my-capability --id my-domain/my-ability
 
 ## Agent bootstrap through MCP
 
-Capability ships a bootstrap MCP server:
+Capability ships a bootstrap MCP server through the same package:
 
 ```bash
-npx -y @wheresmycoleslaw/capability-mcp-placeholder
+npx -y @wheresmycoleslaw/capability mcp-serve
 ```
 
-The published package exposes the executable as `capability-mcp`, so MCP hosts can launch it with npm/npx and receive a small stable tool surface:
+An MCP host can launch that command and receive a small stable tool surface:
 
 - `capability_search`
 - `capability_inspect`
