@@ -1,0 +1,23 @@
+{
+  "capabilityDiscoveryVersion": "0.1",
+  "indexes": [
+    "https://raw.githubusercontent.com/wheresmycoleslaw/capability/main/registry/index.json"
+  ],
+  "package": {
+    "name": "@wheresmycoleslaw/capability",
+    "version": "0.5.0"
+  },
+  "mcp": [
+    {
+      "transport": "stdio",
+      "command": "npx",
+      "args": [
+        "-y",
+        "@wheresmycoleslaw/capability",
+        "mcp-serve"
+      ]
+    }
+  ],
+  "documentation": "https://sithix.com/capability",
+  "repository": "https://github.com/wheresmycoleslaw/capability"
+}

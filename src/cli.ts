@@ -22,6 +22,7 @@ import { writeCapabilityLock } from "./lockfile.js";
 import { assessCapabilityNovelty } from "./innovation.js";
 import { assessProjectReadiness, scaffoldCapabilityProject } from "./scaffold.js";
 import type { CapabilityManifest } from "./types.js";
+import { probeCapabilitySite } from "./web-discovery.js";
 
 function usage(): never {
   console.error(`capability CLI
@@ -33,6 +34,8 @@ Developer onboarding:
   cap registry-entry [package.json] [--out <path>]
 
 Live ecosystem:
+  cap probe <site>
+  cap mcp-serve [--index <url>]
   cap find <query> [--index <url>] [--limit <n>]
   cap info <id-or-query> [--index <url>]
   cap install <id-or-query> [--index <url>] [--lock <path>]
@@ -136,6 +139,21 @@ async function main() {
   const [, , command, ...rawArgs] = process.argv;
   if (!command) usage();
   const args = [...rawArgs];
+
+  if (command === "mcp-serve") {
+    const index = takeOption(args, "--index");
+    if (args.length) usage();
+    if (index) process.env.CAPABILITY_INDEX = index;
+    await import("./mcp-server.js");
+    return;
+  }
+
+  if (command === "probe") {
+    const site = args.shift() ?? usage();
+    if (args.length) usage();
+    console.log(JSON.stringify(await probeCapabilitySite(site), null, 2));
+    return;
+  }
 
   if (command === "create") {
     const packageName = takeOption(args, "--name");
