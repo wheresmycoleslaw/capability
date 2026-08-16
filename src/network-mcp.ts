@@ -1,6 +1,7 @@
 import { CapabilityHub, capabilityDoctor, DEFAULT_CAPABILITY_INDEX_URL } from "./ecosystem.js";
 import { discoverSoftwareWorld } from "./external-discovery.js";
 import { probeCapabilitySite } from "./web-discovery.js";
+import { mineGitHubRepository } from "./repository-mine.js";
 
 export type NetworkMcpTool = {
   name: string;
@@ -31,6 +32,23 @@ const tools: readonly NetworkMcpTool[] = [
         github: { type: "boolean", default: true }
       },
       required: ["query"]
+    },
+    annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true }
+  },
+  {
+    name: "capability_mine_repository",
+    title: "Mine GitHub Repository Abilities",
+    description: "Inspect an arbitrary GitHub repository at an exact commit and infer useful public abilities from manifests, docs, tests, examples, source declarations, routes, and authority signals without executing repository code. Inferences remain non-executable candidates.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        repository: { type: "string", description: "owner/repo or a GitHub repository URL" },
+        ref: { type: "string" },
+        query: { type: "string" },
+        limit: { type: "integer", minimum: 1, maximum: 500 },
+        maxFiles: { type: "integer", minimum: 8, maximum: 500 }
+      },
+      required: ["repository"]
     },
     annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true }
   },
@@ -104,6 +122,15 @@ export class CapabilityNetworkMcpBridge {
           limit,
           npm: args.npm !== false,
           github: args.github !== false
+        }));
+      }
+      if (name === "capability_mine_repository") {
+        if (typeof args.repository !== "string" || !args.repository) throw new TypeError("repository is required");
+        return textResult(await mineGitHubRepository(args.repository, {
+          ref: typeof args.ref === "string" ? args.ref : undefined,
+          query: typeof args.query === "string" ? args.query : undefined,
+          maxCandidates: typeof args.limit === "number" ? Math.max(1, Math.min(500, Math.trunc(args.limit))) : 100,
+          maxFiles: typeof args.maxFiles === "number" ? Math.max(8, Math.min(500, Math.trunc(args.maxFiles))) : 120
         }));
       }
       if (name === "capability_inspect") {

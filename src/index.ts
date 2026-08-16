@@ -30,3 +30,4 @@ export * from "./scaffold.js";
 export * from "./external-discovery.js";
 export * from "./bridge.js";
 export * from "./mcp-import.js";
+export * from "./repository-mine.js";

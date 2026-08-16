@@ -1,7 +1,7 @@
 import { CapabilityHub, DEFAULT_CAPABILITY_INDEX_URL } from "./ecosystem.js";
 
 export type ExternalSoftwareSource = "npm" | "github";
-export type ExternalAdoptionMethod = "native-capability" | "npm-cli" | "mcp" | "openapi" | "manual-adapter";
+export type ExternalAdoptionMethod = "native-capability" | "npm-cli" | "mcp" | "openapi" | "repository-mine" | "manual-adapter";
 
 export type ExternalAdoptionHint = {
   method: ExternalAdoptionMethod;
@@ -204,7 +204,7 @@ export async function searchGitHubSoftware(query: string, options: ExternalDisco
     const item = record(raw);
     if (!item || typeof item.full_name !== "string") continue;
     const topics = strings(item.topics).map((value) => value.toLowerCase());
-    const adoption: ExternalAdoptionHint[] = [hint("manual-adapter", "high", "Repository code can remain upstream; Capability only needs a sidecar around a stable operation or executable surface.")];
+    const adoption: ExternalAdoptionHint[] = [hint("repository-mine", "high", "Capability can inspect the exact repository commit for exported/public abilities, evidence, confidence, and inferred authority without executing repository code."), hint("manual-adapter", "high", "Repository code can remain upstream; Capability only needs a sidecar around a stable operation or executable surface.")];
     if (topics.some((value) => value === "mcp" || value.includes("model-context-protocol"))) adoption.unshift(hint("mcp", "medium", "Repository topics suggest an MCP surface that can be imported as Capability tools."));
     if (topics.some((value) => value === "openapi" || value === "swagger")) adoption.unshift(hint("openapi", "medium", "Repository topics suggest an OpenAPI surface that Capability can import without rewriting the service."));
     const licenseRecord = record(item.license);

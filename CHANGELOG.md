@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.7.0
+
+- mine arbitrary GitHub repositories at exact commits into evidence-backed, non-executable ability candidates
+- correlate public source declarations with manifests, docs, tests, examples, routes, confidence and source coverage
+- infer visible authority signals while explicitly preserving incomplete/unknown effects
+- add `cap mine github` and MCP `capability_mine_repository`
+- expose `@wheresmycoleslaw/capability/repository-mine` and repository-mining documentation
+
 ## 0.6.1
 
 - fix generated npm CLI sidecars under strict TypeScript by explicitly typing bridge execute/verify hooks

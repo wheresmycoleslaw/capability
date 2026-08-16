@@ -26,6 +26,7 @@ import { probeCapabilitySite } from "./web-discovery.js";
 import { discoverSoftwareWorld, inspectNpmPackage } from "./external-discovery.js";
 import { createNpmCliBridgeDescriptor, scaffoldNpmCliBridgeProject } from "./bridge.js";
 import { connectStdioMcpCapabilities } from "./mcp-import.js";
+import { mineGitHubRepository } from "./repository-mine.js";
 
 function usage(): never {
   console.error(`capability CLI
@@ -39,6 +40,7 @@ Developer onboarding:
 
 Discovery and interoperability:
   cap world <query> [--index <url>] [--limit <n>] [--no-npm] [--no-github]
+  cap mine github <owner/repo|url> [--ref <git-ref>] [--query <text>] [--limit <n>] [--max-files <n>] [--max-file-bytes <n>] [--out <path>]
   cap npm-inspect <package> [--version <exact>]
   cap mcp-import <command> [command-args...] [--namespace <name>] [--version <semver>] [--effects-complete]
   cap probe <site>
@@ -167,6 +169,32 @@ async function main() {
     if (args.length) usage();
     if (index) process.env.CAPABILITY_INDEX = index;
     await import("./mcp-server.js");
+    return;
+  }
+
+  if (command === "mine") {
+    const mineKind = args.shift() ?? usage();
+    if (mineKind !== "github") throw new TypeError(`Unknown mine kind: ${mineKind}. Currently supported: github`);
+    const ref = takeOption(args, "--ref");
+    const query = takeOption(args, "--query");
+    const limitRaw = takeOption(args, "--limit");
+    const maxFilesRaw = takeOption(args, "--max-files");
+    const maxFileBytesRaw = takeOption(args, "--max-file-bytes");
+    const output = takeOption(args, "--out");
+    const repository = args.shift() ?? usage();
+    if (args.length) usage();
+    const report = await mineGitHubRepository(repository, {
+      ref,
+      query,
+      ...(limitRaw ? { maxCandidates: Number.parseInt(limitRaw, 10) } : {}),
+      ...(maxFilesRaw ? { maxFiles: Number.parseInt(maxFilesRaw, 10) } : {}),
+      ...(maxFileBytesRaw ? { maxFileBytes: Number.parseInt(maxFileBytesRaw, 10) } : {})
+    });
+    const rendered = JSON.stringify(report, null, 2);
+    if (output) {
+      await writeFile(resolve(output), rendered + "\n", "utf8");
+      console.log(JSON.stringify({ output: resolve(output), repository: report.repository.fullName, commit: report.repository.commit, candidates: report.candidates.length, coverage: report.coverage }, null, 2));
+    } else console.log(rendered);
     return;
   }
 

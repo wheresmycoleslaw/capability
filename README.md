@@ -86,6 +86,19 @@ cap mcp-import node ./server.mjs --namespace existing-server
 
 Unknown external side effects remain explicit through opaque-authority markers until a bridge author audits them. Capability does not turn search results into trusted code by declaration. See [UNIVERSAL.md](./UNIVERSAL.md).
 
+## Mine an arbitrary GitHub repository
+
+Capability can move beyond repository-level search and inspect the contents of an ordinary project that has never adopted Capability:
+
+```bash
+cap mine github owner/repo
+cap mine github owner/repo --query "render video"
+```
+
+The miner resolves an exact commit, reads bounded repository evidence, identifies public/exported functions, CLI surfaces and HTTP operations, correlates docs/tests/examples, infers visible authority signals, and emits non-executable draft contracts with explicit confidence and coverage. It does **not** execute the repository and it never treats missing effect evidence as proof that an effect is absent.
+
+This turns GitHub from a directory of projects into a latent ability corpus while preserving the line between **discovery** and **trust**. See [REPOSITORY_MINING.md](./REPOSITORY_MINING.md).
+
 ## Create a capability
 
 The fastest adoption path is one command:
