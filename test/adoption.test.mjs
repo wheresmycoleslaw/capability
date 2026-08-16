@@ -112,7 +112,7 @@ test("one-command scaffolder creates a publishable, safety-aware project", async
     assert.equal(result.capabilityId, "signal/lattice");
     const pkg = JSON.parse(await readFile(join(target, "package.json"), "utf8"));
     assert.deepEqual(validatePackageDeclaration(pkg.capability), []);
-    assert.equal(pkg.dependencies["@wheresmycoleslaw/capability"], "^0.6.1");
+    assert.equal(pkg.dependencies["@wheresmycoleslaw/capability"], "^0.8.0");
     const readiness = await assessProjectReadiness(join(target, "package.json"));
     assert.equal(readiness.ok, true);
     assert.ok(readiness.score >= 85);
