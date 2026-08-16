@@ -108,3 +108,7 @@ EXISTING SOFTWARE            v
 ```
 
 The long-term objective is not to create a second island of software. It is to make useful software that already exists legible to agents while giving new agent-oriented software a richer native contract from the beginning.
+
+## Repository mining
+
+`cap mine github owner/repo` analyzes an exact repository commit and emits evidence-backed, non-executable candidate abilities. It correlates public source declarations with manifests, documentation, tests, examples, routes, and local effect signals. Repository mining never upgrades an inference into trusted executable code; promotion still requires a concrete adapter/native contract, exact artifact binding, authority review, policy, and isolation.

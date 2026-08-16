@@ -1,7 +1,7 @@
 {
   "name": "@wheresmycoleslaw/capability",
-  "version": "0.6.1",
-  "description": "An open standard and runtime for agents to discover native abilities and existing software, bridge external tools, inspect authority, verify artifacts, and execute with receipts.",
+  "version": "0.7.0",
+  "description": "An open standard and runtime for agents to discover native abilities and existing software, mine arbitrary repositories for evidence-backed abilities, bridge tools, inspect authority, verify artifacts, and execute with receipts.",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -81,6 +81,10 @@
     "./mcp-import": {
       "types": "./dist/mcp-import.d.ts",
       "import": "./dist/mcp-import.js"
+    },
+    "./repository-mine": {
+      "types": "./dist/repository-mine.d.ts",
+      "import": "./dist/repository-mine.js"
     }
   },
   "files": [
@@ -98,7 +102,8 @@
     "DISCOVERY.md",
     "capability-site.schema.json",
     "UNIVERSAL.md",
-    "capability-bridge.schema.json"
+    "capability-bridge.schema.json",
+    "REPOSITORY_MINING.md"
   ],
   "sideEffects": false,
   "scripts": {
@@ -135,7 +140,11 @@
     "bridge",
     "mcp-import",
     "npm-adapter",
-    "universal-tools"
+    "universal-tools",
+    "repository-mining",
+    "source-analysis",
+    "capability-mining",
+    "code-intelligence"
   ],
   "license": "MIT",
   "repository": {
