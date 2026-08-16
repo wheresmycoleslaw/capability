@@ -2,6 +2,7 @@ import { CapabilityHub, capabilityDoctor, DEFAULT_CAPABILITY_INDEX_URL } from ".
 import { discoverSoftwareWorld } from "./external-discovery.js";
 import { probeCapabilitySite } from "./web-discovery.js";
 import { mineGitHubRepository } from "./repository-mine.js";
+import { activateForgedAbility, forgeGitHubAbility, solveSoftwareIntent } from "./forge.js";
 
 export type NetworkMcpTool = {
   name: string;
@@ -51,6 +52,42 @@ const tools: readonly NetworkMcpTool[] = [
       required: ["repository"]
     },
     annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true }
+  },
+  {
+    name: "capability_forge_repository",
+    title: "Forge Repository Ability",
+    description: "Turn a mined GitHub function or CLI into a private Capability sidecar pinned to an exact npm artifact and, when npm gitHead is available, the exact source commit. First execution requires explicit approval and Docker isolation.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        repository: { type: "string" },
+        query: { type: "string" },
+        symbol: { type: "string" },
+        candidateId: { type: "string" },
+        input: {},
+        approved: { type: "boolean", default: false },
+        allowUnverifiedSource: { type: "boolean", default: false }
+      },
+      required: ["repository"]
+    },
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true }
+  },
+  {
+    name: "capability_solve",
+    title: "Solve With the Software World",
+    description: "Given an outcome, search native abilities and existing software. If no native ability is selected, mine promising GitHub repositories and forge the first defensible npm-backed operation. With input and approval, execute the resulting ability in Docker and return a receipt.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        query: { type: "string" },
+        input: {},
+        approved: { type: "boolean", default: false },
+        externalOnly: { type: "boolean", default: false },
+        allowUnverifiedSource: { type: "boolean", default: false }
+      },
+      required: ["query"]
+    },
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true }
   },
   {
     name: "capability_inspect",
@@ -131,6 +168,28 @@ export class CapabilityNetworkMcpBridge {
           query: typeof args.query === "string" ? args.query : undefined,
           maxCandidates: typeof args.limit === "number" ? Math.max(1, Math.min(500, Math.trunc(args.limit))) : 100,
           maxFiles: typeof args.maxFiles === "number" ? Math.max(8, Math.min(500, Math.trunc(args.maxFiles))) : 120
+        }));
+      }
+      if (name === "capability_forge_repository") {
+        if (typeof args.repository !== "string" || !args.repository) throw new TypeError("repository is required");
+        const forged = await forgeGitHubAbility(args.repository, {
+          query: typeof args.query === "string" ? args.query : undefined,
+          symbol: typeof args.symbol === "string" ? args.symbol : undefined,
+          candidateId: typeof args.candidateId === "string" ? args.candidateId : undefined,
+          allowUnverifiedSource: args.allowUnverifiedSource === true
+        });
+        const receipt = args.input !== undefined ? await activateForgedAbility(forged, args.input, { approved: args.approved === true }) : undefined;
+        return textResult({ ...forged, ...(receipt ? { receipt } : {}) });
+      }
+      if (name === "capability_solve") {
+        const query = typeof args.query === "string" ? args.query : "";
+        if (!query) throw new TypeError("query is required");
+        return textResult(await solveSoftwareIntent(query, {
+          indexes: this.indexes,
+          ...(args.input !== undefined ? { input: args.input } : {}),
+          approved: args.approved === true,
+          externalOnly: args.externalOnly === true,
+          allowUnverifiedSource: args.allowUnverifiedSource === true
         }));
       }
       if (name === "capability_inspect") {

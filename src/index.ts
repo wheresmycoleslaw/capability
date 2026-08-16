@@ -31,3 +31,4 @@ export * from "./external-discovery.js";
 export * from "./bridge.js";
 export * from "./mcp-import.js";
 export * from "./repository-mine.js";
+export * from "./forge.js";

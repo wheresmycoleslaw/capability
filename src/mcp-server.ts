@@ -4,7 +4,7 @@ import { CapabilityNetworkMcpBridge } from "./network-mcp.js";
 
 const MODERN_VERSION = "2026-07-28";
 const LEGACY_VERSIONS = ["2025-11-25", "2025-06-18", "2025-03-26", "2024-11-05"] as const;
-const SERVER_INFO = { name: "capability-network", version: "0.7.0" };
+const SERVER_INFO = { name: "capability-network", version: "0.8.0" };
 const bridge = new CapabilityNetworkMcpBridge({ indexes: process.env.CAPABILITY_INDEX ? [process.env.CAPABILITY_INDEX] : undefined });
 
 type JsonRpcId = string | number | null;
@@ -31,7 +31,7 @@ async function handle(request: JsonRpcRequest) {
     return result(id, {
       supportedVersions: [MODERN_VERSION],
       capabilities: { tools: {} },
-      instructions: "Use capability_search for executable Capability-native abilities, capability_search_world to discover existing external software, capability_mine_repository to inspect a selected GitHub repository without executing it, capability_inspect before execution, and capability_execute only after reviewing declared effects and required approval.",
+      instructions: "Use capability_search for native abilities, capability_search_world to discover existing software, capability_mine_repository to inspect source without executing it, capability_forge_repository to bind a selected operation to an exact artifact, or capability_solve to go from an outcome to a native/forged ability. Review authority before any execution.",
       _meta: modernMeta()
     });
   }
@@ -43,7 +43,7 @@ async function handle(request: JsonRpcRequest) {
       protocolVersion: negotiated,
       capabilities: { tools: { listChanged: false } },
       serverInfo: SERVER_INFO,
-      instructions: "Capability is a bootstrap MCP server: search the federated ability network or external software catalogs, mine arbitrary GitHub repositories into evidence-backed non-executable ability candidates, inspect contracts before code loading, bridge existing tools without rewriting them, and execute Capability-native artifacts through verified isolated acquisition."
+      instructions: "Capability is a self-expanding MCP bootstrap: search native or external software, mine arbitrary GitHub repositories, forge selected functions/CLIs into exact artifact-bound private capabilities, and execute first-run inferred software only through explicit approval and Docker isolation."
     });
   }
 

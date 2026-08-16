@@ -1,7 +1,7 @@
 {
   "name": "@wheresmycoleslaw/capability",
-  "version": "0.7.0",
-  "description": "An open standard and runtime for agents to discover native abilities and existing software, mine arbitrary repositories for evidence-backed abilities, bridge tools, inspect authority, verify artifacts, and execute with receipts.",
+  "version": "0.8.0",
+  "description": "An open runtime for agents to search the software world, mine arbitrary repositories, forge exact artifact-bound abilities on demand, inspect authority, isolate execution, and keep receipts.",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -85,6 +85,10 @@
     "./repository-mine": {
       "types": "./dist/repository-mine.d.ts",
       "import": "./dist/repository-mine.js"
+    },
+    "./forge": {
+      "types": "./dist/forge.d.ts",
+      "import": "./dist/forge.js"
     }
   },
   "files": [
@@ -103,7 +107,8 @@
     "capability-site.schema.json",
     "UNIVERSAL.md",
     "capability-bridge.schema.json",
-    "REPOSITORY_MINING.md"
+    "REPOSITORY_MINING.md",
+    "FORGE.md"
   ],
   "sideEffects": false,
   "scripts": {
@@ -144,7 +149,12 @@
     "repository-mining",
     "source-analysis",
     "capability-mining",
-    "code-intelligence"
+    "code-intelligence",
+    "capability-forge",
+    "runtime-acquisition",
+    "self-expanding-agents",
+    "on-demand-tools",
+    "software-metabolism"
   ],
   "license": "MIT",
   "repository": {
