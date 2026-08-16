@@ -116,7 +116,7 @@ test("existing MCP tools can be imported directly as conservative Capability con
     namespace: "legacy-mcp",
     callTool: async (name, input) => { calls.push({ name, input }); return { structuredContent: { ok: true } }; }
   });
-  assert.equal(capability.manifest.id, "legacy-mcp/send-report");
+  assert.equal(capability.manifest.id, "legacy-mcp/send_report");
   assert.ok(capability.manifest.effects.includes("network.connect"));
   assert.ok(capability.manifest.effects.includes("custom:mcp.destructive"));
   assert.ok(capability.manifest.effects.includes("custom:mcp.opaque-effects"));
