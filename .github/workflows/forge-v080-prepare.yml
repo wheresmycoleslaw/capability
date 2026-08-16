@@ -1,0 +1,116 @@
+name: Prepare Capability Forge 0.8
+
+on:
+  push:
+    branches: [forge-v0.8]
+    paths:
+      - .github/workflows/forge-v080-prepare.yml
+
+permissions:
+  contents: write
+
+jobs:
+  integrate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: forge-v0.8
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Integrate Forge into public surfaces
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import json
+
+          def replace(path, old, new):
+              p = Path(path)
+              text = p.read_text()
+              if old not in text:
+                  raise SystemExit(f'marker not found in {path}: {old[:100]!r}')
+              p.write_text(text.replace(old, new, 1))
+
+          # npm inspection now carries source revision metadata when the registry publishes it.
+          replace('src/external-discovery.ts',
+              '  shasum?: string;\n  main?: string;',
+              '  shasum?: string;\n  gitHead?: string;\n  main?: string;')
+          replace('src/external-discovery.ts',
+              '    ...(typeof dist?.shasum === "string" ? { shasum: dist.shasum } : {}),\n    ...(typeof selected.main === "string" ? { main: selected.main } : {}),',
+              '    ...(typeof dist?.shasum === "string" ? { shasum: dist.shasum } : {}),\n    ...(typeof selected.gitHead === "string" ? { gitHead: selected.gitHead } : {}),\n    ...(typeof selected.main === "string" ? { main: selected.main } : {}),')
+
+          replace('src/scaffold.ts', 'const CAPABILITY_RUNTIME_VERSION = "^0.6.1";', 'const CAPABILITY_RUNTIME_VERSION = "^0.8.0";')
+          replace('src/index.ts', 'export * from "./repository-mine.js";', 'export * from "./repository-mine.js";\nexport * from "./forge.js";')
+
+          # CLI: intent -> discovery -> mining -> binding -> isolated execution.
+          replace('src/cli.ts',
+              'import { mineGitHubRepository } from "./repository-mine.js";',
+              'import { mineGitHubRepository } from "./repository-mine.js";\nimport { activateForgedAbility, forgeGitHubAbility, solveSoftwareIntent } from "./forge.js";')
+          replace('src/cli.ts',
+              '  cap mine github <owner/repo|url> [--ref <git-ref>] [--query <text>] [--limit <n>] [--max-files <n>] [--max-file-bytes <n>] [--out <path>]\n',
+              '  cap mine github <owner/repo|url> [--ref <git-ref>] [--query <text>] [--limit <n>] [--max-files <n>] [--max-file-bytes <n>] [--out <path>]\n  cap forge github <owner/repo|url> [--query <text>] [--symbol <name>] [--candidate <id>] [--directory <path>] [--execute <json>] [--approve] [--allow-unverified-source]\n  cap solve <query> [--input <json>] [--approve] [--external] [--directory <path>] [--allow-unverified-source] [--index <url>]\n')
+          cli_marker = '  if (command === "mine") {\n'
+          cli_insert = '''  if (command === "forge") {\n    const forgeKind = args.shift() ?? usage();\n    if (forgeKind !== "github") throw new TypeError(`Unknown forge kind: ${forgeKind}. Currently supported: github`);\n    const ref = takeOption(args, "--ref");\n    const query = takeOption(args, "--query");\n    const symbol = takeOption(args, "--symbol");\n    const candidateId = takeOption(args, "--candidate");\n    const packageVersion = takeOption(args, "--version");\n    const capabilityId = takeOption(args, "--id");\n    const directory = takeOption(args, "--directory");\n    const executeRaw = takeOption(args, "--execute");\n    const approve = takeFlag(args, "--approve");\n    const allowUnverifiedSource = takeFlag(args, "--allow-unverified-source");\n    const repository = args.shift() ?? usage();\n    if (args.length) usage();\n    const forged = await forgeGitHubAbility(repository, { ref, query, symbol, candidateId, packageVersion, capabilityId, directory, allowUnverifiedSource });\n    const receipt = executeRaw !== undefined ? await activateForgedAbility(forged, parseJson(executeRaw), { approved: approve }) : undefined;\n    console.log(JSON.stringify({ ...forged, ...(receipt ? { receipt } : {}), next: receipt ? [] : [`Review ${forged.project.directory}/capability.forge.json`, `cap forge github ${repository} --symbol ${forged.candidate.symbol ?? forged.candidate.name} --execute '{"args":[]}' --approve`] }, null, 2));\n    return;\n  }\n\n  if (command === "solve") {\n    const inputRaw = takeOption(args, "--input");\n    const approve = takeFlag(args, "--approve");\n    const externalOnly = takeFlag(args, "--external");\n    const directory = takeOption(args, "--directory");\n    const allowUnverifiedSource = takeFlag(args, "--allow-unverified-source");\n    const indexes = liveIndexes(args);\n    const query = args.shift() ?? usage();\n    if (args.length) usage();\n    const solved = await solveSoftwareIntent(query, { indexes, ...(inputRaw !== undefined ? { input: parseJson(inputRaw) } : {}), approved: approve, externalOnly, directory, allowUnverifiedSource });\n    console.log(JSON.stringify(solved, null, 2));\n    process.exitCode = solved.route === "unresolved" ? 2 : 0;\n    return;\n  }\n\n'''
+          replace('src/cli.ts', cli_marker, cli_insert + cli_marker)
+
+          # MCP bootstrap gets a one-call software metabolism path.
+          replace('src/network-mcp.ts',
+              'import { mineGitHubRepository } from "./repository-mine.js";',
+              'import { mineGitHubRepository } from "./repository-mine.js";\nimport { activateForgedAbility, forgeGitHubAbility, solveSoftwareIntent } from "./forge.js";')
+          mcp_tool_marker = '  {\n    name: "capability_inspect",\n'
+          mcp_tools = '''  {\n    name: "capability_forge_repository",\n    title: "Forge Repository Ability",\n    description: "Turn a mined GitHub function or CLI into a private Capability sidecar pinned to an exact npm artifact and, when npm gitHead is available, the exact source commit. First execution requires explicit approval and Docker isolation.",\n    inputSchema: {\n      type: "object",\n      properties: {\n        repository: { type: "string" },\n        query: { type: "string" },\n        symbol: { type: "string" },\n        candidateId: { type: "string" },\n        input: {},\n        approved: { type: "boolean", default: false },\n        allowUnverifiedSource: { type: "boolean", default: false }\n      },\n      required: ["repository"]\n    },\n    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true }\n  },\n  {\n    name: "capability_solve",\n    title: "Solve With the Software World",\n    description: "Given an outcome, search native abilities and existing software. If no native ability is selected, mine promising GitHub repositories and forge the first defensible npm-backed operation. With input and approval, execute the resulting ability in Docker and return a receipt.",\n    inputSchema: {\n      type: "object",\n      properties: {\n        query: { type: "string" },\n        input: {},\n        approved: { type: "boolean", default: false },\n        externalOnly: { type: "boolean", default: false },\n        allowUnverifiedSource: { type: "boolean", default: false }\n      },\n      required: ["query"]\n    },\n    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true }\n  },\n'''
+          replace('src/network-mcp.ts', mcp_tool_marker, mcp_tools + mcp_tool_marker)
+          call_marker = '      if (name === "capability_inspect") {\n'
+          call_insert = '''      if (name === "capability_forge_repository") {\n        if (typeof args.repository !== "string" || !args.repository) throw new TypeError("repository is required");\n        const forged = await forgeGitHubAbility(args.repository, {\n          query: typeof args.query === "string" ? args.query : undefined,\n          symbol: typeof args.symbol === "string" ? args.symbol : undefined,\n          candidateId: typeof args.candidateId === "string" ? args.candidateId : undefined,\n          allowUnverifiedSource: args.allowUnverifiedSource === true\n        });\n        const receipt = args.input !== undefined ? await activateForgedAbility(forged, args.input, { approved: args.approved === true }) : undefined;\n        return textResult({ ...forged, ...(receipt ? { receipt } : {}) });\n      }\n      if (name === "capability_solve") {\n        const query = typeof args.query === "string" ? args.query : "";\n        if (!query) throw new TypeError("query is required");\n        return textResult(await solveSoftwareIntent(query, {\n          indexes: this.indexes,\n          ...(args.input !== undefined ? { input: args.input } : {}),\n          approved: args.approved === true,\n          externalOnly: args.externalOnly === true,\n          allowUnverifiedSource: args.allowUnverifiedSource === true\n        }));\n      }\n'''
+          replace('src/network-mcp.ts', call_marker, call_insert + call_marker)
+
+          replace('src/mcp-server.ts', 'const SERVER_INFO = { name: "capability-network", version: "0.7.0" };', 'const SERVER_INFO = { name: "capability-network", version: "0.8.0" };')
+          replace('src/mcp-server.ts',
+              'instructions: "Use capability_search for executable Capability-native abilities, capability_search_world to discover existing external software, capability_mine_repository to inspect a selected GitHub repository without executing it, capability_inspect before execution, and capability_execute only after reviewing declared effects and required approval.",',
+              'instructions: "Use capability_search for native abilities, capability_search_world to discover existing software, capability_mine_repository to inspect source without executing it, capability_forge_repository to bind a selected operation to an exact artifact, or capability_solve to go from an outcome to a native/forged ability. Review authority before any execution.",')
+          replace('src/mcp-server.ts',
+              'instructions: "Capability is a bootstrap MCP server: search the federated ability network or external software catalogs, mine arbitrary GitHub repositories into evidence-backed non-executable ability candidates, inspect contracts before code loading, bridge existing tools without rewriting them, and execute Capability-native artifacts through verified isolated acquisition."',
+              'instructions: "Capability is a self-expanding MCP bootstrap: search native or external software, mine arbitrary GitHub repositories, forge selected functions/CLIs into exact artifact-bound private capabilities, and execute first-run inferred software only through explicit approval and Docker isolation."')
+
+          # Package/export metadata.
+          p = Path('package.json')
+          pkg = json.loads(p.read_text())
+          pkg['version'] = '0.8.0'
+          pkg['description'] = 'An open runtime for agents to search the software world, mine arbitrary repositories, forge exact artifact-bound abilities on demand, inspect authority, isolate execution, and keep receipts.'
+          pkg.setdefault('exports', {})['./forge'] = {'types': './dist/forge.d.ts', 'import': './dist/forge.js'}
+          if 'FORGE.md' not in pkg['files']: pkg['files'].append('FORGE.md')
+          for kw in ['capability-forge', 'runtime-acquisition', 'self-expanding-agents', 'on-demand-tools', 'software-metabolism']:
+              if kw not in pkg['keywords']: pkg['keywords'].append(kw)
+          p.write_text(json.dumps(pkg, indent=2) + '\n')
+
+          # README/changelog.
+          readme_marker = '## Create a capability\n'
+          readme_insert = '''## Forge an ability from software that never adopted Capability\n\nCapability 0.8 can cross the boundary that repository mining deliberately left closed. After finding a useful operation in an ordinary GitHub repository, Forge can bind that evidence to an exact published npm artifact, generate a private Capability sidecar, preserve unknown authority explicitly, and execute the first run in Docker with a receipt.\n\n```bash\ncap forge github sindresorhus/slugify --query "slugify text" --symbol slugify\ncap forge github sindresorhus/slugify --symbol slugify --execute '{"args":["Hello Capability World"]}' --approve\n```\n\nOr start with nothing but an outcome:\n\n```bash\ncap solve "turn a string into camel case" --external --input '{"args":["hello capability world"]}' --approve\n```\n\nWhen npm publishes `gitHead`, Forge re-mines that exact commit before generating the executable binder. Source evidence therefore cannot silently drift away from the package version being executed. Every forged operation still carries `custom:external.opaque-effects`, requires approval, and uses Docker for first execution. See [FORGE.md](./FORGE.md).\n\n'''
+          replace('README.md', readme_marker, readme_insert + readme_marker)
+          replace('README.md', '- [Universal software discovery and bridges](./UNIVERSAL.md)\n', '- [Universal software discovery and bridges](./UNIVERSAL.md)\n- [Capability Forge: intent to exact artifact-bound ability](./FORGE.md)\n')
+          replace('CHANGELOG.md', '# Changelog\n\n', '''# Changelog\n\n## 0.8.0\n\n- add Capability Forge: mined GitHub functions and CLIs can become private executable sidecars without upstream adoption\n- bind npm-backed source evidence to the exact published artifact and re-mine npm `gitHead` before execution when available\n- add `cap forge github` for source → artifact → generated contract → Docker execution → receipt\n- add intent-first `cap solve`, which searches native abilities and the existing software world, then attempts runtime forging when needed\n- add MCP `capability_forge_repository` and `capability_solve` so an agent can expand its toolset during the same session\n- preserve unknown authority through `custom:external.opaque-effects`; forged first runs require explicit approval and Docker and never silently fall back in-process\n- add content-addressed evidence hashes and forge descriptors linking candidate evidence, exact source commit, exact npm package/version/integrity, generated binding, and authority status\n\n''')
+
+          # Post-release proof: mine, forge, install, build and execute a function from an unchanged third-party repository.
+          smoke_marker = '      - name: Inspect an existing npm package without installing it\n'
+          smoke_insert = '''      - name: Forge and execute an unchanged GitHub function\n        run: |\n          cap forge github sindresorhus/slugify --query "slugify text" --symbol slugify --directory /tmp/forged-slugify --execute '{"args":["Hello Capability World"]}' --approve > /tmp/forge.json\n          grep -q '"sourceBinding": "verified-git-head"' /tmp/forge.json\n          grep -q '"kind": "npm-export"' /tmp/forge.json\n          grep -q 'hello-capability-world' /tmp/forge.json\n          grep -q '"status": "succeeded"' /tmp/forge.json\n'''
+          replace('.github/workflows/ecosystem-smoke.yml', smoke_marker, smoke_insert + smoke_marker)
+          PY
+
+      - name: Refresh lockfile and registry
+        run: |
+          npm install --ignore-scripts
+          npm run build
+          npm run registry
+      - name: Validate release candidate
+        run: |
+          npm test
+          npm pack --dry-run
+          npm run registry:validate
+      - name: Commit verified integration
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add . ':!.github/workflows/forge-v080-prepare.yml'
+          git commit -m "Integrate Capability Forge 0.8"
+          git push origin HEAD:forge-v0.8
