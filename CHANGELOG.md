@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.6.0
+
+- software-world discovery through `cap world`, keeping executable Capability entries separate from external npm/GitHub candidates
+- resilient external catalog search that can return healthy-source results even when another catalog is unavailable or rate-limited
+- exact npm package inspection through `cap npm-inspect`, including published bins, repository, integrity, and native Capability declaration detection
+- first sidecar bridge format and JSON Schema for binding existing software to Capability without rewriting the upstream project
+- `cap bridge npm` scaffolding for exact-version existing npm CLI tools
+- explicit `custom:external.opaque-effects` authority marker until a bridge author audits and declares the complete upstream effect surface
+- MCP-to-Capability import for existing MCP tools with conservative effect mapping
+- stdio MCP client/importer through `cap mcp-import`, allowing an unchanged MCP server to become Capability-compatible at runtime
+- `capability_search_world` MCP bootstrap primitive for finding useful software outside the native Capability registry
+- remote URL support for `cap openapi`, extending the existing OpenAPI 3.1 importer beyond local files
+- universal interoperability guide describing native software, external candidates, sidecars, MCP imports, and trust boundaries
+- post-release smoke coverage for real npm-world discovery, npm inspection, MCP import, and the existing isolated execution paths
+
 ## 0.5.0
 
 - bootstrap discovery layer so developers and agents can find Capability before already knowing about it
