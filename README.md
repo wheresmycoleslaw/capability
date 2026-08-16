@@ -99,6 +99,23 @@ The miner resolves an exact commit, reads bounded repository evidence, identifie
 
 This turns GitHub from a directory of projects into a latent ability corpus while preserving the line between **discovery** and **trust**. See [REPOSITORY_MINING.md](./REPOSITORY_MINING.md).
 
+## Forge an ability from software that never adopted Capability
+
+Capability 0.8 can cross the boundary that repository mining deliberately left closed. After finding a useful operation in an ordinary GitHub repository, Forge can bind that evidence to an exact published npm artifact, generate a private Capability sidecar, preserve unknown authority explicitly, and execute the first run in Docker with a receipt.
+
+```bash
+cap forge github sindresorhus/slugify --query "slugify text" --symbol slugify
+cap forge github sindresorhus/slugify --symbol slugify --execute '{"args":["Hello Capability World"]}' --approve
+```
+
+Or start with nothing but an outcome:
+
+```bash
+cap solve "turn a string into camel case" --external --input '{"args":["hello capability world"]}' --approve
+```
+
+When npm publishes `gitHead`, Forge re-mines that exact commit before generating the executable binder. Source evidence therefore cannot silently drift away from the package version being executed. Every forged operation still carries `custom:external.opaque-effects`, requires approval, and uses Docker for first execution. See [FORGE.md](./FORGE.md).
+
 ## Create a capability
 
 The fastest adoption path is one command:
@@ -334,6 +351,7 @@ See [REGISTRY.md](./REGISTRY.md) to publish capabilities or federate an independ
 
 - [Adoption guide](./ADOPTION.md)
 - [Universal software discovery and bridges](./UNIVERSAL.md)
+- [Capability Forge: intent to exact artifact-bound ability](./FORGE.md)
 - [Contributing](./CONTRIBUTING.md)
 - [Specification](./SPEC.md)
 - [Architecture](./ARCHITECTURE.md)

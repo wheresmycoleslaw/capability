@@ -40,6 +40,7 @@ export type NpmPackageInspection = {
   capabilityDeclared: boolean;
   integrity?: string;
   shasum?: string;
+  gitHead?: string;
   main?: string;
   exports?: unknown;
 };
@@ -184,6 +185,7 @@ export async function inspectNpmPackage(name: string, version?: string, options:
     capabilityDeclared: Boolean(record(selected.capability)),
     ...(typeof dist?.integrity === "string" ? { integrity: dist.integrity } : {}),
     ...(typeof dist?.shasum === "string" ? { shasum: dist.shasum } : {}),
+    ...(typeof selected.gitHead === "string" ? { gitHead: selected.gitHead } : {}),
     ...(typeof selected.main === "string" ? { main: selected.main } : {}),
     ...(selected.exports !== undefined ? { exports: selected.exports } : {})
   };

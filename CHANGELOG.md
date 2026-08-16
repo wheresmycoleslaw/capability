@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.8.0
+
+- add Capability Forge: mined GitHub functions and CLIs can become private executable sidecars without upstream adoption
+- bind npm-backed source evidence to the exact published artifact and re-mine npm `gitHead` before execution when available
+- add `cap forge github` for source → artifact → generated contract → Docker execution → receipt
+- add intent-first `cap solve`, which searches native abilities and the existing software world, then attempts runtime forging when needed
+- add MCP `capability_forge_repository` and `capability_solve` so an agent can expand its toolset during the same session
+- preserve unknown authority through `custom:external.opaque-effects`; forged first runs require explicit approval and Docker and never silently fall back in-process
+- add content-addressed evidence hashes and forge descriptors linking candidate evidence, exact source commit, exact npm package/version/integrity, generated binding, and authority status
+
 ## 0.7.0
 
 - mine arbitrary GitHub repositories at exact commits into evidence-backed, non-executable ability candidates

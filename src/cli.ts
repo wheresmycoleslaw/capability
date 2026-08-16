@@ -27,6 +27,7 @@ import { discoverSoftwareWorld, inspectNpmPackage } from "./external-discovery.j
 import { createNpmCliBridgeDescriptor, scaffoldNpmCliBridgeProject } from "./bridge.js";
 import { connectStdioMcpCapabilities } from "./mcp-import.js";
 import { mineGitHubRepository } from "./repository-mine.js";
+import { activateForgedAbility, forgeGitHubAbility, solveSoftwareIntent } from "./forge.js";
 
 function usage(): never {
   console.error(`capability CLI
@@ -41,6 +42,8 @@ Developer onboarding:
 Discovery and interoperability:
   cap world <query> [--index <url>] [--limit <n>] [--no-npm] [--no-github]
   cap mine github <owner/repo|url> [--ref <git-ref>] [--query <text>] [--limit <n>] [--max-files <n>] [--max-file-bytes <n>] [--out <path>]
+  cap forge github <owner/repo|url> [--query <text>] [--symbol <name>] [--candidate <id>] [--directory <path>] [--execute <json>] [--approve] [--allow-unverified-source]
+  cap solve <query> [--input <json>] [--approve] [--external] [--directory <path>] [--allow-unverified-source] [--index <url>]
   cap npm-inspect <package> [--version <exact>]
   cap mcp-import <command> [command-args...] [--namespace <name>] [--version <semver>] [--effects-complete]
   cap probe <site>
@@ -169,6 +172,42 @@ async function main() {
     if (args.length) usage();
     if (index) process.env.CAPABILITY_INDEX = index;
     await import("./mcp-server.js");
+    return;
+  }
+
+  if (command === "forge") {
+    const forgeKind = args.shift() ?? usage();
+    if (forgeKind !== "github") throw new TypeError(`Unknown forge kind: ${forgeKind}. Currently supported: github`);
+    const ref = takeOption(args, "--ref");
+    const query = takeOption(args, "--query");
+    const symbol = takeOption(args, "--symbol");
+    const candidateId = takeOption(args, "--candidate");
+    const packageVersion = takeOption(args, "--version");
+    const capabilityId = takeOption(args, "--id");
+    const directory = takeOption(args, "--directory");
+    const executeRaw = takeOption(args, "--execute");
+    const approve = takeFlag(args, "--approve");
+    const allowUnverifiedSource = takeFlag(args, "--allow-unverified-source");
+    const repository = args.shift() ?? usage();
+    if (args.length) usage();
+    const forged = await forgeGitHubAbility(repository, { ref, query, symbol, candidateId, packageVersion, capabilityId, directory, allowUnverifiedSource });
+    const receipt = executeRaw !== undefined ? await activateForgedAbility(forged, parseJson(executeRaw), { approved: approve }) : undefined;
+    console.log(JSON.stringify({ ...forged, ...(receipt ? { receipt } : {}), next: receipt ? [] : [`Review ${forged.project.directory}/capability.forge.json`, `cap forge github ${repository} --symbol ${forged.candidate.symbol ?? forged.candidate.name} --execute '{"args":[]}' --approve`] }, null, 2));
+    return;
+  }
+
+  if (command === "solve") {
+    const inputRaw = takeOption(args, "--input");
+    const approve = takeFlag(args, "--approve");
+    const externalOnly = takeFlag(args, "--external");
+    const directory = takeOption(args, "--directory");
+    const allowUnverifiedSource = takeFlag(args, "--allow-unverified-source");
+    const indexes = liveIndexes(args);
+    const query = args.shift() ?? usage();
+    if (args.length) usage();
+    const solved = await solveSoftwareIntent(query, { indexes, ...(inputRaw !== undefined ? { input: parseJson(inputRaw) } : {}), approved: approve, externalOnly, directory, allowUnverifiedSource });
+    console.log(JSON.stringify(solved, null, 2));
+    process.exitCode = solved.route === "unresolved" ? 2 : 0;
     return;
   }
 
