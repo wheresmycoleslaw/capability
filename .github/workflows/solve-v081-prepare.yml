@@ -65,7 +65,6 @@ jobs:
 
           replace('CHANGELOG.md', '# Changelog\n\n', '''# Changelog\n\n## 0.8.1\n\n- fix intent-first Forge execution from automatically created temp directories: Docker runs forged code as a non-root UID, while `mkdtemp` creates 0700 roots; Forge now makes only the generated root traversable (0755) before first-run isolation\n- prefer npm-backed GitHub repositories when `cap solve` spends bounded Forge attempts, matching the current executable binder boundary instead of wasting attempts on repositories with no installable npm artifact\n- increase the default Forge attempt budget from 4 to 6 while preserving every failed attempt and reason in the result\n- update generated Capability/Forge projects to depend on the fixed 0.8.1 runtime\n\n''')
 
-          # Make intent-first solving part of the permanent released-package smoke, using a capability absent from the seed registry.
           marker = '''      - name: Inspect an existing npm package without installing it\n'''
           addition = '''      - name: Solve an unseen outcome by acquiring software during the run\n        run: |\n          cap solve "convert separated text to camel case" --input '{"args":["hello capability world"]}' --approve > /tmp/solve.json\n          grep -q '"route": "forged"' /tmp/solve.json\n          grep -q 'helloCapabilityWorld' /tmp/solve.json\n          grep -q '"status": "succeeded"' /tmp/solve.json\n'''
           p = Path('.github/workflows/ecosystem-smoke.yml')
@@ -83,6 +82,8 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add . ':!.github/workflows/solve-v081-prepare.yml'
+          git add . \
+            ':!.github/workflows/solve-v081-prepare.yml' \
+            ':!.github/workflows/ecosystem-smoke.yml'
           git commit -m "Fix intent-first Capability Solve execution"
           git push origin HEAD:solve-v0.8.1
