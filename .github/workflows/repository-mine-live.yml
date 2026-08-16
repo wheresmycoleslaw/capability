@@ -1,0 +1,37 @@
+name: Repository Miner Live
+
+on:
+  push:
+    branches: [repository-mining-v0.7]
+    paths:
+      - .github/workflows/repository-mine-live.yml
+
+permissions:
+  contents: read
+
+jobs:
+  mine:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: npm install --ignore-scripts
+      - run: npm run build
+      - name: Mine unchanged public repositories without executing them
+        run: |
+          node dist/cli.js mine github sindresorhus/slugify --query slug --max-files 40 --limit 30 > /tmp/slugify.json
+          grep -q '"fullName": "sindresorhus/slugify"' /tmp/slugify.json
+          grep -q '"executable": false' /tmp/slugify.json
+          grep -q '"complete": false' /tmp/slugify.json
+          grep -qi 'slug' /tmp/slugify.json
+
+          node dist/cli.js mine github expressjs/express --query route --max-files 60 --limit 40 > /tmp/express.json
+          grep -q '"fullName": "expressjs/express"' /tmp/express.json
+          grep -q '"executable": false' /tmp/express.json
+          grep -q '"sourceCoverageRatio"' /tmp/express.json
+      - name: Verify MCP advertises repository mining
+        run: |
+          printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}' | node dist/cli.js mcp-serve > /tmp/mcp.jsonl
+          grep -q 'capability_mine_repository' /tmp/mcp.jsonl
