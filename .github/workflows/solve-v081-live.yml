@@ -1,0 +1,57 @@
+name: Capability Solve 0.8.1 Live Proof
+
+on:
+  push:
+    branches: [solve-v0.8.1]
+    paths:
+      - .github/workflows/solve-v081-live.yml
+
+permissions:
+  contents: read
+
+jobs:
+  proof:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: solve-v0.8.1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 25
+      - run: npm install --ignore-scripts
+      - run: npm run build
+      - run: npm pack --pack-destination /tmp
+      - run: docker pull node:24-alpine
+      - name: Start with an outcome and acquire a new ability
+        run: |
+          node --input-type=module <<'NODE' > /tmp/solve.json
+          import { readFile, writeFile } from 'node:fs/promises';
+          import { join } from 'node:path';
+          import { activateForgedAbility, solveSoftwareIntent } from './dist/forge.js';
+
+          const solved = await solveSoftwareIntent('convert separated text to camel case', {
+            externalOnly: true,
+            maxForgeAttempts: 8
+          });
+          if (solved.route !== 'forged' || !solved.forged) {
+            console.log(JSON.stringify(solved, null, 2));
+            throw new Error(`Expected forged route, received ${solved.route}`);
+          }
+
+          const packagePath = join(solved.forged.project.directory, 'package.json');
+          const pkg = JSON.parse(await readFile(packagePath, 'utf8'));
+          pkg.dependencies['@wheresmycoleslaw/capability'] = 'file:/tmp/wheresmycoleslaw-capability-0.8.1.tgz';
+          await writeFile(packagePath, JSON.stringify(pkg, null, 2) + '\n');
+
+          const receipt = await activateForgedAbility(
+            solved.forged,
+            { args: ['hello capability world'] },
+            { approved: true }
+          );
+          console.log(JSON.stringify({ ...solved, receipt }, null, 2));
+          NODE
+          cat /tmp/solve.json
+          grep -q '"route": "forged"' /tmp/solve.json
+          grep -q 'helloCapabilityWorld' /tmp/solve.json
+          grep -q '"status": "succeeded"' /tmp/solve.json
