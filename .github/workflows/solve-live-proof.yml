@@ -20,10 +20,20 @@ jobs:
       - run: npm install --global npm@11
       - run: npm install --global @wheresmycoleslaw/capability@0.8.0
       - run: docker pull node:24-alpine
-      - name: Start from an outcome with no prewired slug tool
+      - name: Inspect intent-first selection
         run: |
+          set +e
+          cap world "slugify text" --limit 12 > /tmp/world.json
+          WORLD=$?
           cap solve "slugify text" --external --input '{"args":["Hello Capability World"]}' --approve > /tmp/solve.json
+          SOLVE=$?
+          set -e
+          echo "WORLD_EXIT=$WORLD SOLVE_EXIT=$SOLVE"
+          echo '--- WORLD ---'
+          cat /tmp/world.json
+          echo '--- SOLVE ---'
           cat /tmp/solve.json
+          test "$SOLVE" -eq 0
           grep -q '"route": "forged"' /tmp/solve.json
           grep -q 'hello-capability-world' /tmp/solve.json
           grep -q '"status": "succeeded"' /tmp/solve.json
