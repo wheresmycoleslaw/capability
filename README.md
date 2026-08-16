@@ -28,6 +28,52 @@ PUBLIC INDEX / FEDERATION
       ROLLBACK?
 ```
 
+## Software metabolism
+
+Capability 0.8.1 can start with an outcome the agent has **no matching tool for**, discover ordinary software that already solves it, understand an untouched repository, turn a selected operation into a private Capability, and execute its first run in Docker with a receipt.
+
+The released-package smoke proves this without naming a package or repository:
+
+```bash
+cap solve "convert separated text to camel case" \
+  --input '{"args":["hello capability world"]}' \
+  --approve
+```
+
+```text
+request begins with no camelCase tool
+        ↓
+search native Capability contracts
+        ↓
+reject text/normalize: plausible text match, wrong intent
+        ↓
+search existing software
+        ↓
+discover sindresorhus/camelcase
+        ↓
+mine the untouched repository
+        ↓
+discover camelCase()
+        ↓
+bind camelcase@9.0.0 ↔ npm gitHead ↔ exact Git commit
+        ↓
+generate a private Capability sidecar
+        ↓
+keep custom:external.opaque-effects visible
+        ↓
+explicit approval + Docker first run
+        ↓
+"hello capability world" → "helloCapabilityWorld"
+        ↓
+receipt: succeeded
+```
+
+**No package name. No repository name. No prewired camelCase tool. No upstream Capability integration.**
+
+The upstream project was not modified and did not need to know Capability existed. This is a constrained first implementation of **software metabolism for agents**: the agent can acquire a new executable ability from the existing software world during the same session in which it discovers that it needs it.
+
+The automatic Forge boundary is intentionally narrower than repository mining: today it can bind npm CLI entry points and root-callable JavaScript/TypeScript npm exports. Other mined languages and surfaces remain non-executable evidence until a real binder exists.
+
 ## Install
 
 ```bash
@@ -101,7 +147,7 @@ This turns GitHub from a directory of projects into a latent ability corpus whil
 
 ## Forge an ability from software that never adopted Capability
 
-Capability 0.8 can cross the boundary that repository mining deliberately left closed. After finding a useful operation in an ordinary GitHub repository, Forge can bind that evidence to an exact published npm artifact, generate a private Capability sidecar, preserve unknown authority explicitly, and execute the first run in Docker with a receipt.
+Capability 0.8.1 can cross the boundary that repository mining deliberately left closed. After finding a useful operation in an ordinary GitHub repository, Forge can bind that evidence to an exact published npm artifact, generate a private Capability sidecar, preserve unknown authority explicitly, and execute the first run in Docker with a receipt.
 
 ```bash
 cap forge github sindresorhus/slugify --query "slugify text" --symbol slugify
@@ -111,7 +157,7 @@ cap forge github sindresorhus/slugify --symbol slugify --execute '{"args":["Hell
 Or start with nothing but an outcome:
 
 ```bash
-cap solve "turn a string into camel case" --external --input '{"args":["hello capability world"]}' --approve
+cap solve "turn a string into camel case" --input '{"args":["hello capability world"]}' --approve
 ```
 
 When npm publishes `gitHead`, Forge re-mines that exact commit before generating the executable binder. Source evidence therefore cannot silently drift away from the package version being executed. Every forged operation still carries `custom:external.opaque-effects`, requires approval, and uses Docker for first execution. See [FORGE.md](./FORGE.md).
