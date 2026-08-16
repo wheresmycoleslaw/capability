@@ -26,6 +26,16 @@ jobs:
           VERSION=$(cat .release)
           npm install --global "@wheresmycoleslaw/capability@$VERSION"
       - run: cap doctor
+      - name: Search beyond the Capability registry
+        run: |
+          cap world "typescript compiler" --no-github --limit 3 > /tmp/world.json
+          grep -q '"kind": "external"' /tmp/world.json
+          grep -q '"source": "npm"' /tmp/world.json
+      - name: Inspect an existing npm package without installing it
+        run: |
+          cap npm-inspect typescript > /tmp/npm-inspect.json
+          grep -q '"name": "typescript"' /tmp/npm-inspect.json
+          grep -q '"tsc"' /tmp/npm-inspect.json
       - name: Probe the public web bootstrap
         run: |
           cap probe https://sithix.com > /tmp/site.json
@@ -40,7 +50,13 @@ jobs:
             | cap mcp-serve > /tmp/mcp.jsonl
           grep -q '2026-07-28' /tmp/mcp.jsonl
           grep -q 'capability_search' /tmp/mcp.jsonl
+          grep -q 'capability_search_world' /tmp/mcp.jsonl
           grep -q 'capability_probe_site' /tmp/mcp.jsonl
+      - name: Import an unchanged MCP server as Capability contracts
+        run: |
+          cap mcp-import cap mcp-serve --namespace bootstrap > /tmp/mcp-import.json
+          grep -q 'bootstrap/capability_search_world' /tmp/mcp-import.json
+          grep -q 'custom:mcp.opaque-effects' /tmp/mcp-import.json
       - name: Discover new agent-native capability
         run: |
           cap find "failure frontier" > /tmp/capability-find.json
