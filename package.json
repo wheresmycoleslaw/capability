@@ -1,6 +1,6 @@
 {
   "name": "@wheresmycoleslaw/capability",
-  "version": "0.6.0",
+  "version": "0.6.1",
   "description": "An open standard and runtime for agents to discover native abilities and existing software, bridge external tools, inspect authority, verify artifacts, and execute with receipts.",
   "type": "module",
   "main": "./dist/index.js",

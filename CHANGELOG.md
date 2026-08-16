@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.6.1
+
+- fix generated npm CLI sidecars under strict TypeScript by explicitly typing bridge execute/verify hooks
+- add release-gate coverage that compiles and runs a sidecar around the unchanged TypeScript `tsc` package before publishing
+
 ## 0.6.0
 
 - software-world discovery through `cap world`, keeping executable Capability entries separate from external npm/GitHub candidates
