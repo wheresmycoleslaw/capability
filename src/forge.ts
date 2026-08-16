@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { chmod, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, join, resolve } from "node:path";
 import { spawn } from "node:child_process";
@@ -15,7 +15,7 @@ import type { CapabilityEffect, CapabilityReceipt, JsonValue } from "./types.js"
 import { sha256 } from "./utils.js";
 
 export const CAPABILITY_FORGE_VERSION = "0.1" as const;
-export const CAPABILITY_FORGE_RUNTIME_VERSION = "^0.8.0" as const;
+export const CAPABILITY_FORGE_RUNTIME_VERSION = "^0.8.1" as const;
 
 export type ForgeBindingKind = "npm-cli" | "npm-export";
 export type ForgeSourceBinding = "verified-git-head" | "unverified-source-artifact-link";
@@ -299,7 +299,15 @@ export async function forgeGitHubAbility(locator: string, options: ForgeGitHubOp
   }
 
   const candidate = chooseCandidate(report, options);
-  const directory = resolve(options.directory ?? await mkdtemp(join(tmpdir(), "capability-forge-")));
+  let directory: string;
+  if (options.directory) {
+    directory = resolve(options.directory);
+  } else {
+    directory = resolve(await mkdtemp(join(tmpdir(), "capability-forge-")));
+    // mkdtemp intentionally creates 0700 directories. Docker first-run executes as a non-root UID,
+    // so the generated package root must be traversable without making its files writable.
+    await chmod(directory, 0o755);
+  }
   let project: ForgedAbility["project"];
   let binding: ForgeDescriptor["binding"];
 
@@ -400,8 +408,14 @@ export async function solveSoftwareIntent(query: string, options: SolveIntentOpt
     };
   }
 
-  const repositories = [...new Set(discovery.external.map((entry) => entry.repository).filter((value): value is string => Boolean(value && /github\.com/i.test(value))))];
-  for (const [index, repository] of repositories.slice(0, options.maxForgeAttempts ?? 4).entries()) {
+  const forgeableExternal = [...discovery.external].sort((a, b) => {
+    // Forge currently binds npm-backed repositories. Prefer npm search hits over bare GitHub hits
+    // so intent-first solving spends its bounded attempts on candidates with an installable artifact.
+    const artifactBias = (entry: typeof a) => entry.source === "npm" ? 1 : 0;
+    return artifactBias(b) - artifactBias(a) || b.score - a.score || a.sourceRank - b.sourceRank;
+  });
+  const repositories = [...new Set(forgeableExternal.map((entry) => entry.repository).filter((value): value is string => Boolean(value && /github\.com/i.test(value))))];
+  for (const [index, repository] of repositories.slice(0, options.maxForgeAttempts ?? 6).entries()) {
     try {
       const directory = options.directory ? resolve(options.directory, `candidate-${index + 1}-${slug(basename(repository))}`) : undefined;
       const forged = await forgeGitHubAbility(repository, {
