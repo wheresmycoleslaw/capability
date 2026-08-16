@@ -1,6 +1,6 @@
 {
   "name": "@wheresmycoleslaw/capability",
-  "version": "0.8.0",
+  "version": "0.8.1",
   "description": "An open runtime for agents to search the software world, mine arbitrary repositories, forge exact artifact-bound abilities on demand, inspect authority, isolate execution, and keep receipts.",
   "type": "module",
   "main": "./dist/index.js",

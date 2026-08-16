@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { chmod, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, join, resolve } from "node:path";
 import { spawn } from "node:child_process";
@@ -15,7 +15,7 @@ import type { CapabilityEffect, CapabilityReceipt, JsonValue } from "./types.js"
 import { sha256 } from "./utils.js";
 
 export const CAPABILITY_FORGE_VERSION = "0.1" as const;
-export const CAPABILITY_FORGE_RUNTIME_VERSION = "^0.8.0" as const;
+export const CAPABILITY_FORGE_RUNTIME_VERSION = "^0.8.1" as const;
 
 export type ForgeBindingKind = "npm-cli" | "npm-export";
 export type ForgeSourceBinding = "verified-git-head" | "unverified-source-artifact-link";
@@ -102,10 +102,28 @@ export type SolveIntentResult = {
   query: string;
   route: "native" | "forged" | "unresolved";
   discovery: Awaited<ReturnType<typeof discoverSoftwareWorld>>;
-  native?: { id: string; package: string; receipt?: CapabilityReceipt };
+  native?: { id: string; package: string; intentFit: ReturnType<typeof assessNativeIntentFit>; receipt?: CapabilityReceipt };
   forged?: ForgedAbility & { receipt?: CapabilityReceipt };
   attempts: readonly { repository: string; ok: boolean; reason?: string }[];
 };
+
+const INTENT_STOPWORDS = new Set(["a", "an", "the", "to", "of", "for", "in", "on", "at", "by", "with", "and", "or", "from", "into", "this", "that", "my", "your", "its", "please"]);
+
+function intentTokens(value: string): string[] {
+  return [...new Set(value.toLowerCase().split(/[^a-z0-9]+/g).filter((token) => token.length > 1 && !INTENT_STOPWORDS.has(token)))];
+}
+
+export function assessNativeIntentFit(query: string, candidate: { id: string; name: string; description: string }): { accepted: boolean; coverage: number; matched: string[]; missing: string[] } {
+  const queryTokens = intentTokens(query);
+  const candidateTokens = new Set(intentTokens(`${candidate.id} ${candidate.name} ${candidate.description}`));
+  const matched = queryTokens.filter((token) => candidateTokens.has(token));
+  const missing = queryTokens.filter((token) => !candidateTokens.has(token));
+  const coverage = queryTokens.length ? matched.length / queryTokens.length : 0;
+  // Lexical discovery is a locator, not proof that the ability satisfies the request.
+  // Require a majority of the actual intent vocabulary before auto-selecting a native ability.
+  // Otherwise continue into external discovery/Forge rather than executing a plausible-but-wrong tool.
+  return { accepted: queryTokens.length > 0 && coverage >= 0.6, coverage, matched, missing };
+}
 
 function slug(value: string): string {
   return value.toLowerCase().replace(/^@/, "").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 72) || "ability";
@@ -299,7 +317,15 @@ export async function forgeGitHubAbility(locator: string, options: ForgeGitHubOp
   }
 
   const candidate = chooseCandidate(report, options);
-  const directory = resolve(options.directory ?? await mkdtemp(join(tmpdir(), "capability-forge-")));
+  let directory: string;
+  if (options.directory) {
+    directory = resolve(options.directory);
+  } else {
+    directory = resolve(await mkdtemp(join(tmpdir(), "capability-forge-")));
+    // mkdtemp intentionally creates 0700 directories. Docker first-run executes as a non-root UID,
+    // so the generated package root must be traversable without making its files writable.
+    await chmod(directory, 0o755);
+  }
   let project: ForgedAbility["project"];
   let binding: ForgeDescriptor["binding"];
 
@@ -383,25 +409,34 @@ export async function solveSoftwareIntent(query: string, options: SolveIntentOpt
   });
   const attempts: Array<{ repository: string; ok: boolean; reason?: string }> = [];
 
-  if (!options.externalOnly && discovery.native[0]) {
-    const top = discovery.native[0];
-    let receipt: CapabilityReceipt | undefined;
-    if (options.input !== undefined) {
-      const hub = new CapabilityHub({ indexes });
-      const execution = await hub.run(top.id, options.input, { approved: options.approved === true });
-      receipt = execution.receipt;
+  if (!options.externalOnly) {
+    const nativeMatch = discovery.native.map((candidate) => ({ candidate, fit: assessNativeIntentFit(query, candidate) })).find((entry) => entry.fit.accepted);
+    if (nativeMatch) {
+      const top = nativeMatch.candidate;
+      let receipt: CapabilityReceipt | undefined;
+      if (options.input !== undefined) {
+        const hub = new CapabilityHub({ indexes });
+        const execution = await hub.run(top.id, options.input, { approved: options.approved === true });
+        receipt = execution.receipt;
+      }
+      return {
+        query,
+        route: "native",
+        discovery,
+        native: { id: top.id, package: top.package, intentFit: nativeMatch.fit, ...(receipt ? { receipt } : {}) },
+        attempts
+      };
     }
-    return {
-      query,
-      route: "native",
-      discovery,
-      native: { id: top.id, package: top.package, ...(receipt ? { receipt } : {}) },
-      attempts
-    };
   }
 
-  const repositories = [...new Set(discovery.external.map((entry) => entry.repository).filter((value): value is string => Boolean(value && /github\.com/i.test(value))))];
-  for (const [index, repository] of repositories.slice(0, options.maxForgeAttempts ?? 4).entries()) {
+  const forgeableExternal = [...discovery.external].sort((a, b) => {
+    // Forge currently binds npm-backed repositories. Prefer npm search hits over bare GitHub hits
+    // so intent-first solving spends its bounded attempts on candidates with an installable artifact.
+    const artifactBias = (entry: typeof a) => entry.source === "npm" ? 1 : 0;
+    return artifactBias(b) - artifactBias(a) || b.score - a.score || a.sourceRank - b.sourceRank;
+  });
+  const repositories = [...new Set(forgeableExternal.map((entry) => entry.repository).filter((value): value is string => Boolean(value && /github\.com/i.test(value))))];
+  for (const [index, repository] of repositories.slice(0, options.maxForgeAttempts ?? 6).entries()) {
     try {
       const directory = options.directory ? resolve(options.directory, `candidate-${index + 1}-${slug(basename(repository))}`) : undefined;
       const forged = await forgeGitHubAbility(repository, {

@@ -1,9 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtemp, readFile } from "node:fs/promises";
+import { mkdtemp, readFile, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { forgeGitHubAbility } from "../dist/forge.js";
+import { assessNativeIntentFit, forgeGitHubAbility } from "../dist/forge.js";
 
 function response(value, status = 200) {
   return new Response(typeof value === "string" ? value : JSON.stringify(value), {
@@ -59,6 +59,17 @@ function fixtureFetch() {
   };
 }
 
+test("intent fit refuses a lexical native near-miss but accepts a specific native match", () => {
+  const normalize = { id: "text/normalize", name: "Normalize Text", description: "Normalize whitespace, surrounding space, and letter case in text." };
+  const slugify = { id: "text/slugify", name: "Slugify Text", description: "Convert text to a deterministic URL-friendly slug." };
+  const miss = assessNativeIntentFit("convert separated text to camel case", normalize);
+  assert.equal(miss.accepted, false);
+  assert.ok(miss.missing.includes("camel"));
+  const hit = assessNativeIntentFit("slugify text", slugify);
+  assert.equal(hit.accepted, true);
+  assert.equal(hit.coverage, 1);
+});
+
 test("forges a mined repository function into an exact npm-backed inert capability", async () => {
   const directory = await mkdtemp(join(tmpdir(), "capability-forge-test-"));
   const forged = await forgeGitHubAbility("acme/text-kit", {
@@ -80,7 +91,7 @@ test("forges a mined repository function into an exact npm-backed inert capabili
   const pkg = JSON.parse(await readFile(join(directory, "package.json"), "utf8"));
   assert.equal(pkg.private, true);
   assert.equal(pkg.dependencies["@acme/text-kit"], "1.4.0");
-  assert.equal(pkg.dependencies["@wheresmycoleslaw/capability"], "^0.8.0");
+  assert.equal(pkg.dependencies["@wheresmycoleslaw/capability"], "^0.8.1");
   const manifest = pkg.capability.exports[forged.project.capabilityId].manifest;
   assert.ok(manifest.effects.includes("custom:external.opaque-effects"));
   assert.equal(manifest.metadata.upstreamCommit, forged.descriptor.repository.commit);
@@ -88,6 +99,16 @@ test("forges a mined repository function into an exact npm-backed inert capabili
   const source = await readFile(join(directory, "src/index.ts"), "utf8");
   assert.match(source, /const exportName = "normalizeText"/);
   assert.match(source, /await import\(packageName\)/);
+});
+
+test("default Forge temp roots are traversable by the non-root Docker executor", async () => {
+  const forged = await forgeGitHubAbility("acme/text-kit", {
+    fetch: fixtureFetch(),
+    query: "normalize text",
+    symbol: "normalizeText"
+  });
+  const mode = (await stat(forged.project.directory)).mode & 0o777;
+  assert.notEqual(mode & 0o111, 0, `expected executable directory bits, received ${mode.toString(8)}`);
 });
 
 test("refuses first execution source binding when npm cannot prove a gitHead", async () => {

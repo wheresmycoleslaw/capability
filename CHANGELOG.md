@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.8.1
+
+- fix intent-first Forge execution from automatically created temp directories: Docker runs forged code as a non-root UID, while `mkdtemp` creates 0700 roots; Forge now makes only the generated root traversable (0755) before first-run isolation
+- prefer npm-backed GitHub repositories when `cap solve` spends bounded Forge attempts, matching the current executable binder boundary instead of wasting attempts on repositories with no installable npm artifact
+- increase the default Forge attempt budget from 4 to 6 while preserving every failed attempt and reason in the result
+- update generated Capability/Forge projects to depend on the fixed 0.8.1 runtime
+
 ## 0.8.0
 
 - add Capability Forge: mined GitHub functions and CLIs can become private executable sidecars without upstream adoption
