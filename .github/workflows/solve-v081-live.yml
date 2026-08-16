@@ -31,7 +31,6 @@ jobs:
           import { activateForgedAbility, solveSoftwareIntent } from './dist/forge.js';
 
           const solved = await solveSoftwareIntent('convert separated text to camel case', {
-            externalOnly: true,
             maxForgeAttempts: 8
           });
           if (solved.route !== 'forged' || !solved.forged) {
@@ -53,5 +52,6 @@ jobs:
           NODE
           cat /tmp/solve.json
           grep -q '"route": "forged"' /tmp/solve.json
+          grep -q 'sindresorhus/camelcase' /tmp/solve.json
           grep -q 'helloCapabilityWorld' /tmp/solve.json
           grep -q '"status": "succeeded"' /tmp/solve.json
