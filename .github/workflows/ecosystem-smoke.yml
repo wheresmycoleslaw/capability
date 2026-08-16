@@ -45,6 +45,12 @@ jobs:
           grep -q '"kind": "npm-export"' /tmp/forge.json
           grep -q 'hello-capability-world' /tmp/forge.json
           grep -q '"status": "succeeded"' /tmp/forge.json
+      - name: Solve an unseen outcome by acquiring software during the run
+        run: |
+          cap solve "convert separated text to camel case" --input '{"args":["hello capability world"]}' --approve > /tmp/solve.json
+          grep -q '"route": "forged"' /tmp/solve.json
+          grep -q 'helloCapabilityWorld' /tmp/solve.json
+          grep -q '"status": "succeeded"' /tmp/solve.json
       - name: Inspect an existing npm package without installing it
         run: |
           cap npm-inspect typescript > /tmp/npm-inspect.json
