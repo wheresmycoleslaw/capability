@@ -1,0 +1,29 @@
+name: Capability Solve Live Proof
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/solve-live-proof.yml
+
+permissions:
+  contents: read
+
+jobs:
+  proof:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 25
+          registry-url: https://registry.npmjs.org
+      - run: npm install --global npm@11
+      - run: npm install --global @wheresmycoleslaw/capability@0.8.0
+      - run: docker pull node:24-alpine
+      - name: Start from an outcome with no prewired slug tool
+        run: |
+          cap solve "slugify text" --external --input '{"args":["Hello Capability World"]}' --approve > /tmp/solve.json
+          cat /tmp/solve.json
+          grep -q '"route": "forged"' /tmp/solve.json
+          grep -q 'hello-capability-world' /tmp/solve.json
+          grep -q '"status": "succeeded"' /tmp/solve.json
