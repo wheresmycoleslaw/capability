@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { mkdtemp, readFile, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { forgeGitHubAbility } from "../dist/forge.js";
+import { assessNativeIntentFit, forgeGitHubAbility } from "../dist/forge.js";
 
 function response(value, status = 200) {
   return new Response(typeof value === "string" ? value : JSON.stringify(value), {
@@ -58,6 +58,17 @@ function fixtureFetch() {
     return response(`unexpected URL ${url}`, 404);
   };
 }
+
+test("intent fit refuses a lexical native near-miss but accepts a specific native match", () => {
+  const normalize = { id: "text/normalize", name: "Normalize Text", description: "Normalize whitespace, surrounding space, and letter case in text." };
+  const slugify = { id: "text/slugify", name: "Slugify Text", description: "Convert text to a deterministic URL-friendly slug." };
+  const miss = assessNativeIntentFit("convert separated text to camel case", normalize);
+  assert.equal(miss.accepted, false);
+  assert.ok(miss.missing.includes("camel"));
+  const hit = assessNativeIntentFit("slugify text", slugify);
+  assert.equal(hit.accepted, true);
+  assert.equal(hit.coverage, 1);
+});
 
 test("forges a mined repository function into an exact npm-backed inert capability", async () => {
   const directory = await mkdtemp(join(tmpdir(), "capability-forge-test-"));

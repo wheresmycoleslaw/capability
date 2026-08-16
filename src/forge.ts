@@ -102,10 +102,28 @@ export type SolveIntentResult = {
   query: string;
   route: "native" | "forged" | "unresolved";
   discovery: Awaited<ReturnType<typeof discoverSoftwareWorld>>;
-  native?: { id: string; package: string; receipt?: CapabilityReceipt };
+  native?: { id: string; package: string; intentFit: ReturnType<typeof assessNativeIntentFit>; receipt?: CapabilityReceipt };
   forged?: ForgedAbility & { receipt?: CapabilityReceipt };
   attempts: readonly { repository: string; ok: boolean; reason?: string }[];
 };
+
+const INTENT_STOPWORDS = new Set(["a", "an", "the", "to", "of", "for", "in", "on", "at", "by", "with", "and", "or", "from", "into", "this", "that", "my", "your", "its", "please"]);
+
+function intentTokens(value: string): string[] {
+  return [...new Set(value.toLowerCase().split(/[^a-z0-9]+/g).filter((token) => token.length > 1 && !INTENT_STOPWORDS.has(token)))];
+}
+
+export function assessNativeIntentFit(query: string, candidate: { id: string; name: string; description: string }): { accepted: boolean; coverage: number; matched: string[]; missing: string[] } {
+  const queryTokens = intentTokens(query);
+  const candidateTokens = new Set(intentTokens(`${candidate.id} ${candidate.name} ${candidate.description}`));
+  const matched = queryTokens.filter((token) => candidateTokens.has(token));
+  const missing = queryTokens.filter((token) => !candidateTokens.has(token));
+  const coverage = queryTokens.length ? matched.length / queryTokens.length : 0;
+  // Lexical discovery is a locator, not proof that the ability satisfies the request.
+  // Require a majority of the actual intent vocabulary before auto-selecting a native ability.
+  // Otherwise continue into external discovery/Forge rather than executing a plausible-but-wrong tool.
+  return { accepted: queryTokens.length > 0 && coverage >= 0.6, coverage, matched, missing };
+}
 
 function slug(value: string): string {
   return value.toLowerCase().replace(/^@/, "").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 72) || "ability";
@@ -391,21 +409,24 @@ export async function solveSoftwareIntent(query: string, options: SolveIntentOpt
   });
   const attempts: Array<{ repository: string; ok: boolean; reason?: string }> = [];
 
-  if (!options.externalOnly && discovery.native[0]) {
-    const top = discovery.native[0];
-    let receipt: CapabilityReceipt | undefined;
-    if (options.input !== undefined) {
-      const hub = new CapabilityHub({ indexes });
-      const execution = await hub.run(top.id, options.input, { approved: options.approved === true });
-      receipt = execution.receipt;
+  if (!options.externalOnly) {
+    const nativeMatch = discovery.native.map((candidate) => ({ candidate, fit: assessNativeIntentFit(query, candidate) })).find((entry) => entry.fit.accepted);
+    if (nativeMatch) {
+      const top = nativeMatch.candidate;
+      let receipt: CapabilityReceipt | undefined;
+      if (options.input !== undefined) {
+        const hub = new CapabilityHub({ indexes });
+        const execution = await hub.run(top.id, options.input, { approved: options.approved === true });
+        receipt = execution.receipt;
+      }
+      return {
+        query,
+        route: "native",
+        discovery,
+        native: { id: top.id, package: top.package, intentFit: nativeMatch.fit, ...(receipt ? { receipt } : {}) },
+        attempts
+      };
     }
-    return {
-      query,
-      route: "native",
-      discovery,
-      native: { id: top.id, package: top.package, ...(receipt ? { receipt } : {}) },
-      attempts
-    };
   }
 
   const forgeableExternal = [...discovery.external].sort((a, b) => {
