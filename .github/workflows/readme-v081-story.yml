@@ -1,0 +1,46 @@
+name: Prepare Capability 0.8.1 README Story
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/readme-v081-story.yml
+
+permissions:
+  contents: write
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - name: Put the outcome-first proof at the top of the README
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('README.md')
+          text = p.read_text()
+          marker = '## Install\n'
+          if marker not in text:
+              raise SystemExit('README install marker missing')
+          story = '''## Software metabolism\n\nCapability 0.8.1 can start with an outcome the agent has **no matching tool for**, discover ordinary software that already solves it, understand an untouched repository, turn a selected operation into a private Capability, and execute its first run in Docker with a receipt.\n\nThe released-package smoke proves this without naming a package or repository:\n\n```bash\ncap solve "convert separated text to camel case" \\\n  --input '{"args":["hello capability world"]}' \\\n  --approve\n```\n\n```text\nrequest begins with no camelCase tool\n        ↓\nsearch native Capability contracts\n        ↓\nreject text/normalize: plausible text match, wrong intent\n        ↓\nsearch existing software\n        ↓\ndiscover sindresorhus/camelcase\n        ↓\nmine the untouched repository\n        ↓\ndiscover camelCase()\n        ↓\nbind camelcase@9.0.0 ↔ npm gitHead ↔ exact Git commit\n        ↓\ngenerate a private Capability sidecar\n        ↓\nkeep custom:external.opaque-effects visible\n        ↓\nexplicit approval + Docker first run\n        ↓\n"hello capability world" → "helloCapabilityWorld"\n        ↓\nreceipt: succeeded\n```\n\n**No package name. No repository name. No prewired camelCase tool. No upstream Capability integration.**\n\nThe upstream project was not modified and did not need to know Capability existed. This is a constrained first implementation of **software metabolism for agents**: the agent can acquire a new executable ability from the existing software world during the same session in which it discovers that it needs it.\n\nThe automatic Forge boundary is intentionally narrower than repository mining: today it can bind npm CLI entry points and root-callable JavaScript/TypeScript npm exports. Other mined languages and surfaces remain non-executable evidence until a real binder exists.\n\n'''
+          if '## Software metabolism\n' not in text:
+              text = text.replace(marker, story + marker, 1)
+          text = text.replace('Capability 0.8 can cross the boundary', 'Capability 0.8.1 can cross the boundary')
+          text = text.replace('cap solve "turn a string into camel case" --external --input', 'cap solve "turn a string into camel case" --input')
+          p.write_text(text)
+          PY
+      - name: Validate README commands remain represented in CLI docs
+        run: |
+          grep -q 'cap solve "convert separated text to camel case"' README.md
+          grep -q 'sindresorhus/camelcase' README.md
+          grep -q 'software metabolism' README.md
+      - name: Commit README
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add README.md
+          git commit -m "Lead with Capability software metabolism proof"
+          git push origin HEAD:main
