@@ -89,7 +89,7 @@ export function capabilitiesFromMcpTools(tools: readonly ImportableMcpTool[], op
   return tools.map((tool) => {
     if (!tool.name) throw new TypeError("MCP tool name is required");
     const effects = importedEffects(tool, options);
-    return defineCapability({
+    return defineCapability<unknown, unknown>({
       manifest: {
         specVersion: "0.1",
         id: `${namespace}/${slugify(tool.name)}`,
@@ -111,7 +111,7 @@ export function capabilitiesFromMcpTools(tools: readonly ImportableMcpTool[], op
           authorityComplete: options.effectsComplete === true
         }
       },
-      async execute(input) {
+      async execute(input: unknown) {
         return outputFromToolResult(await options.callTool(tool.name, input));
       }
     });
