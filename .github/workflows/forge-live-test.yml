@@ -1,0 +1,35 @@
+name: Capability Forge Live Proof
+
+on:
+  push:
+    branches: [forge-v0.8]
+    paths:
+      - .github/workflows/forge-live-test.yml
+
+permissions:
+  contents: read
+
+jobs:
+  proof:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 25
+      - run: npm install --ignore-scripts
+      - run: npm run build
+      - run: docker pull node:24-alpine
+      - name: Turn an unchanged GitHub function into an ability and execute it
+        run: |
+          node dist/cli.js forge github sindresorhus/slugify \
+            --query "slugify text" \
+            --symbol slugify \
+            --directory /tmp/forged-slugify \
+            --execute '{"args":["Hello Capability World"]}' \
+            --approve > /tmp/forge.json
+          cat /tmp/forge.json
+          grep -q '"sourceBinding": "verified-git-head"' /tmp/forge.json
+          grep -q '"kind": "npm-export"' /tmp/forge.json
+          grep -q 'hello-capability-world' /tmp/forge.json
+          grep -q '"status": "succeeded"' /tmp/forge.json
