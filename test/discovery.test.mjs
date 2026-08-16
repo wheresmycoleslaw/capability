@@ -48,11 +48,12 @@ test("site discovery document is deterministic and well-known", async () => {
   assert.equal(probe.indexes.length, 1);
 });
 
-test("MCP bootstrap bridge exposes network and software-world discovery primitives", () => {
+test("MCP bootstrap bridge exposes network, software-world and repository-mining discovery primitives", () => {
   const names = capabilityNetworkMcpTools().map((tool) => tool.name);
   assert.deepEqual(names, [
     "capability_search",
     "capability_search_world",
+    "capability_mine_repository",
     "capability_inspect",
     "capability_execute",
     "capability_probe_site",
@@ -86,4 +87,5 @@ test("stdio MCP bridge serves modern discovery and legacy initialize", async (t)
   assert.deepEqual(replies[0].result.supportedVersions, ["2026-07-28"]);
   assert.equal(replies[1].result.protocolVersion, "2025-11-25");
   assert.equal(replies[2].result.tools.some((tool) => tool.name === "capability_search_world"), true);
+  assert.equal(replies[2].result.tools.some((tool) => tool.name === "capability_mine_repository"), true);
 });
