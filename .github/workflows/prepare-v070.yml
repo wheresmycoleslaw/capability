@@ -120,6 +120,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add package.json src/external-discovery.ts src/cli.ts src/network-mcp.ts src/mcp-server.ts README.md UNIVERSAL.md CHANGELOG.md registry/index.json .github/workflows/ecosystem-smoke.yml
+          git restore .github/workflows/ecosystem-smoke.yml
+          git add package.json src/external-discovery.ts src/cli.ts src/network-mcp.ts src/mcp-server.ts README.md UNIVERSAL.md CHANGELOG.md registry/index.json
           git commit -m "Integrate repository mining for Capability 0.7.0"
           git push origin HEAD:repository-mining-v0.7
