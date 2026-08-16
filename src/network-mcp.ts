@@ -1,4 +1,5 @@
 import { CapabilityHub, capabilityDoctor, DEFAULT_CAPABILITY_INDEX_URL } from "./ecosystem.js";
+import { discoverSoftwareWorld } from "./external-discovery.js";
 import { probeCapabilitySite } from "./web-discovery.js";
 
 export type NetworkMcpTool = {
@@ -15,6 +16,22 @@ const tools: readonly NetworkMcpTool[] = [
     title: "Search Capability Network",
     description: "Discover executable abilities from the federated Capability network before installing code. Use this when you need an ability that is not already available as a tool.",
     inputSchema: { type: "object", properties: { query: { type: "string" }, limit: { type: "integer", minimum: 1, maximum: 25 } }, required: ["query"] },
+    annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true }
+  },
+  {
+    name: "capability_search_world",
+    title: "Search the Software World",
+    description: "Search native Capability indexes plus external npm and GitHub catalogs. External results are candidates, not trusted executable capabilities, until a native contract, OpenAPI/MCP import, or sidecar bridge binds a specific operation and authority surface.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        query: { type: "string" },
+        limit: { type: "integer", minimum: 1, maximum: 25 },
+        npm: { type: "boolean", default: true },
+        github: { type: "boolean", default: true }
+      },
+      required: ["query"]
+    },
     annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true }
   },
   {
@@ -77,6 +94,17 @@ export class CapabilityNetworkMcpBridge {
           score: entry.score,
           reasons: entry.reasons
         })));
+      }
+      if (name === "capability_search_world") {
+        const query = typeof args.query === "string" ? args.query : "";
+        if (!query) throw new TypeError("query is required");
+        const limit = typeof args.limit === "number" ? Math.max(1, Math.min(25, Math.trunc(args.limit))) : 10;
+        return textResult(await discoverSoftwareWorld(query, {
+          indexes: this.indexes,
+          limit,
+          npm: args.npm !== false,
+          github: args.github !== false
+        }));
       }
       if (name === "capability_inspect") {
         if (typeof args.id !== "string" || !args.id) throw new TypeError("id is required");

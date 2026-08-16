@@ -27,3 +27,6 @@ export * from "./lockfile.js";
 export * from "./innovation.js";
 export * from "./evolution.js";
 export * from "./scaffold.js";
+export * from "./external-discovery.js";
+export * from "./bridge.js";
+export * from "./mcp-import.js";

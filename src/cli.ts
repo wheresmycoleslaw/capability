@@ -21,19 +21,26 @@ import { NpmPackageInstaller, VerifiedNpmPackageInstaller } from "./installer.js
 import { writeCapabilityLock } from "./lockfile.js";
 import { assessCapabilityNovelty } from "./innovation.js";
 import { assessProjectReadiness, scaffoldCapabilityProject } from "./scaffold.js";
-import type { CapabilityManifest } from "./types.js";
+import type { CapabilityEffect, CapabilityManifest } from "./types.js";
 import { probeCapabilitySite } from "./web-discovery.js";
+import { discoverSoftwareWorld, inspectNpmPackage } from "./external-discovery.js";
+import { createNpmCliBridgeDescriptor, scaffoldNpmCliBridgeProject } from "./bridge.js";
+import { connectStdioMcpCapabilities } from "./mcp-import.js";
 
 function usage(): never {
   console.error(`capability CLI
 
 Developer onboarding:
   cap create <directory> [--name <package>] [--id <capability-id>] [--description <text>] [--repo <url>] [--force]
+  cap bridge npm <package> [directory] [--version <exact>] [--bin <name>] [--id <capability-id>] [--effect <effect>...] [--effects-complete] [--name <text>] [--description <text>] [--repo <url>] [--force]
   cap readiness [package.json]
   cap novelty <capability-id|manifest.json> [--package <package.json>] [--index <url>]
   cap registry-entry [package.json] [--out <path>]
 
-Live ecosystem:
+Discovery and interoperability:
+  cap world <query> [--index <url>] [--limit <n>] [--no-npm] [--no-github]
+  cap npm-inspect <package> [--version <exact>]
+  cap mcp-import <command> [command-args...] [--namespace <name>] [--version <semver>] [--effects-complete]
   cap probe <site>
   cap mcp-serve [--index <url>]
   cap find <query> [--index <url>] [--limit <n>]
@@ -52,7 +59,7 @@ Local/package tools:
   cap eval <package.json> <capability-id> <cases.json> [--approve]
   cap trust <package.json> <capability-id>
   cap index <output.json> <package.json...>
-  cap openapi <openapi.json> [namespace]
+  cap openapi <openapi.json|url> [namespace]
   cap mcp-tools <package.json...>`);
   process.exit(1);
 }
@@ -70,6 +77,12 @@ function takeOption(args: string[], name: string): string | undefined {
   const inline = args.findIndex((arg) => arg.startsWith(prefix));
   if (inline >= 0) return args.splice(inline, 1)[0]!.slice(prefix.length);
   return undefined;
+}
+function takeOptions(args: string[], name: string): string[] {
+  const result: string[] = [];
+  let value: string | undefined;
+  while ((value = takeOption(args, name)) !== undefined) result.push(value);
+  return result;
 }
 function takeFlag(args: string[], name: string): boolean {
   const index = args.indexOf(name);
@@ -135,6 +148,15 @@ async function liveHub(args: string[], executorName?: string) {
   });
 }
 
+async function readOpenApiSource(source: string): Promise<unknown> {
+  if (!/^https?:\/\//i.test(source)) return JSON.parse(await readFile(resolve(source), "utf8"));
+  const fetchImpl = globalThis.fetch;
+  if (!fetchImpl) throw new TypeError("A fetch implementation is required for remote OpenAPI documents");
+  const response = await fetchImpl(source, { headers: { accept: "application/json" } });
+  if (!response.ok) throw new Error(`Failed to fetch OpenAPI document: HTTP ${response.status}`);
+  return response.json();
+}
+
 async function main() {
   const [, , command, ...rawArgs] = process.argv;
   if (!command) usage();
@@ -145,6 +167,70 @@ async function main() {
     if (args.length) usage();
     if (index) process.env.CAPABILITY_INDEX = index;
     await import("./mcp-server.js");
+    return;
+  }
+
+  if (command === "world") {
+    const limitRaw = takeOption(args, "--limit");
+    const indexes = liveIndexes(args);
+    const npm = !takeFlag(args, "--no-npm");
+    const github = !takeFlag(args, "--no-github");
+    const query = args.shift() ?? usage();
+    if (args.length) usage();
+    const limit = limitRaw ? Number.parseInt(limitRaw, 10) : 10;
+    console.log(JSON.stringify(await discoverSoftwareWorld(query, { indexes, limit, npm, github }), null, 2));
+    return;
+  }
+
+  if (command === "npm-inspect") {
+    const version = takeOption(args, "--version");
+    const packageName = args.shift() ?? usage();
+    if (args.length) usage();
+    console.log(JSON.stringify(await inspectNpmPackage(packageName, version), null, 2));
+    return;
+  }
+
+  if (command === "bridge") {
+    const bridgeKind = args.shift() ?? usage();
+    if (bridgeKind !== "npm") throw new TypeError(`Unknown bridge kind: ${bridgeKind}. Currently supported: npm`);
+    const version = takeOption(args, "--version");
+    const bin = takeOption(args, "--bin");
+    const id = takeOption(args, "--id");
+    const name = takeOption(args, "--name");
+    const description = takeOption(args, "--description");
+    const repository = takeOption(args, "--repo");
+    const effects = takeOptions(args, "--effect") as CapabilityEffect[];
+    const effectsComplete = takeFlag(args, "--effects-complete");
+    const force = takeFlag(args, "--force");
+    const packageName = args.shift() ?? usage();
+    const directory = args.shift();
+    if (args.length) usage();
+    const inspection = await inspectNpmPackage(packageName, version);
+    const descriptor = createNpmCliBridgeDescriptor(inspection, { id, bin, name, description, effects, effectsComplete });
+    if (!directory) {
+      console.log(JSON.stringify(descriptor, null, 2));
+      return;
+    }
+    const result = await scaffoldNpmCliBridgeProject(descriptor, { directory, repository, force });
+    console.log(JSON.stringify({ descriptor, project: result, next: [`cd ${result.directory}`, "npm install", "npm test", "npm run readiness", "npm run novelty"] }, null, 2));
+    return;
+  }
+
+  if (command === "mcp-import") {
+    const namespace = takeOption(args, "--namespace");
+    const version = takeOption(args, "--version");
+    const effectsComplete = takeFlag(args, "--effects-complete");
+    const serverCommand = args.shift() ?? usage();
+    const connection = await connectStdioMcpCapabilities({ command: serverCommand, args, namespace, version, effectsComplete });
+    try {
+      console.log(JSON.stringify({
+        server: { command: serverCommand, args },
+        tools: connection.tools.map((tool) => tool.name),
+        capabilities: connection.capabilities.map(inspectCapability)
+      }, null, 2));
+    } finally {
+      connection.session.close();
+    }
     return;
   }
 
@@ -316,10 +402,10 @@ async function main() {
     return;
   }
   if (command === "openapi") {
-    const [path, namespace] = args;
-    if (!path) usage();
-    const document = JSON.parse(await readFile(resolve(path), "utf8"));
-    const capabilities = capabilitiesFromOpenApi(document, { namespace });
+    const [source, namespace] = args;
+    if (!source) usage();
+    const document = await readOpenApiSource(source);
+    const capabilities = capabilitiesFromOpenApi(document as Record<string, unknown>, { namespace });
     console.log(JSON.stringify(capabilities.map(inspectCapability), null, 2));
     return;
   }
