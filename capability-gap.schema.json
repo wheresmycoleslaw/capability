@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/wheresmycoleslaw/capability/main/capability-gap.schema.json",
+  "title": "Capability Gap",
+  "description": "A machine-readable specification for an unresolved software ability after discovery and composition attempts.",
+  "type": "object",
+  "required": ["gapVersion", "id", "intent", "createdAt", "required", "searched", "evidence", "status"],
+  "properties": {
+    "gapVersion": { "const": "0.1" },
+    "id": { "type": "string", "pattern": "^gap/[a-z0-9._-]+$" },
+    "intent": { "type": "string", "minLength": 1 },
+    "createdAt": { "type": "string", "format": "date-time" },
+    "required": {
+      "type": "object",
+      "required": ["effectsCeiling", "verification"],
+      "properties": {
+        "input": { "type": "object" },
+        "output": { "type": "object" },
+        "effectsCeiling": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "uniqueItems": true
+        },
+        "verification": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "minItems": 1
+        }
+      },
+      "additionalProperties": false
+    },
+    "searched": {
+      "type": "array",
+      "items": {
+        "enum": ["native", "npm", "pypi", "oci", "mcp", "openapi", "repository", "composition", "gap"]
+      },
+      "uniqueItems": true
+    },
+    "evidence": {
+      "type": "object",
+      "required": ["nativeCandidates", "externalCandidates", "compositionAttempts"],
+      "properties": {
+        "nativeCandidates": { "type": "array", "items": { "type": "string" } },
+        "externalCandidates": { "type": "array", "items": { "type": "string" } },
+        "compositionAttempts": { "type": "array", "items": { "type": "string" } }
+      },
+      "additionalProperties": false
+    },
+    "status": { "const": "unresolved" }
+  },
+  "additionalProperties": false
+}
