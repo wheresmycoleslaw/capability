@@ -1,0 +1,44 @@
+name: Apply Capability 0.9 Metabolic Engine
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/metabolism-v090-apply.yml']
+permissions:
+  contents: write
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 25
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Extract and apply generated source
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          text=Path('.github/workflows/metabolism-v090-build.yml').read_text()
+          def extract(start,end):
+              body=text.split(start,1)[1].split(end,1)[0]
+              lines=body.splitlines()
+              return '\n'.join((line[10:] if line.startswith('          ') else line) for line in lines).lstrip('\n')+'\n'
+          Path('src/metabolism.ts').write_text(extract("          cat > src/metabolism.ts <<'EOF'\n","\n          EOF\n"))
+          Path('/tmp/mutate.py').write_text(extract("          python - <<'PY'\n","\n          PY\n"))
+          tail=text.split("          cat > test/metabolism.test.mjs <<'EOF'\n",1)[1]
+          Path('test/metabolism.test.mjs').write_text('\n'.join((line[10:] if line.startswith('          ') else line) for line in tail.split("\n          EOF\n",1)[0].splitlines())+'\n')
+          PY
+          python /tmp/mutate.py
+          npm install --ignore-scripts
+          npm test
+      - name: Commit metabolic engine
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add src/metabolism.ts src/index.ts src/cli.ts package.json package-lock.json .release README.md METABOLISM.md test/metabolism.test.mjs
+          git commit -m 'Capability 0.9: metabolize multiple software substrates'
+          git push origin HEAD:main
