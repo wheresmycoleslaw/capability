@@ -1,0 +1,181 @@
+name: Polish Capability 0.9 Metabolic Semantics
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/metabolism-v090-polish.yml']
+permissions:
+  contents: write
+jobs:
+  polish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 25
+      - name: Align coverage claims, gaps, README and changelog
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          p=Path('src/metabolism.ts'); s=p.read_text()
+          s=s.replace('{ substrate: "pypi", discovery: "automatic", mining: "artifact", binding: "automatic", firstExecution: "docker",', '{ substrate: "pypi", discovery: "explicit", mining: "artifact", binding: "automatic", firstExecution: "docker",')
+          s=s.replace('{ substrate: "composition", discovery: "derived", mining: "contract", binding: "planned", firstExecution: "normal",', '{ substrate: "composition", discovery: "derived", mining: "contract", binding: "automatic", firstExecution: "normal",')
+          s=s.replace('searched: options.searched ?? ["native", "npm", "pypi", "repository", "composition"],', 'searched: options.searched ?? ["native", "npm", "repository", "composition"],')
+          marker='export type MetabolizeResult = { intent: string; route: MetabolicSubstrate; result?: unknown; receipt?: unknown; gap?: CapabilityGap; attempts: { substrate: MetabolicSubstrate; ok: boolean; detail: string }[] };\n'
+          helper='''export type MetabolizeResult = { intent: string; route: MetabolicSubstrate; result?: unknown; receipt?: unknown; gap?: CapabilityGap; attempts: { substrate: MetabolicSubstrate; ok: boolean; detail: string }[] };\n\nfunction searchedFromAttempts(attempts: MetabolizeResult["attempts"]): MetabolicSubstrate[] {\n  const searched: MetabolicSubstrate[] = ["native", "npm", "repository", "composition"];\n  for (const substrate of ["pypi", "oci"] as const) if (attempts.some((attempt) => attempt.substrate === substrate)) searched.push(substrate);\n  return searched;\n}\n'''
+          if 'function searchedFromAttempts' not in s: s=s.replace(marker,helper)
+          s=s.replace('createCapabilityGap(intent, { externalCandidates: external, searched: ["native", "npm", "repository", "composition"] })', 'createCapabilityGap(intent, { externalCandidates: external, searched: searchedFromAttempts(attempts) })')
+          s=s.replace('createCapabilityGap(intent, { nativeCandidates: discovery.native.map((x) => x.id), externalCandidates: discovery.external.map((x) => x.name), searched: ["native", "npm", "repository", "composition"] })', 'createCapabilityGap(intent, { nativeCandidates: discovery.native.map((x) => x.id), externalCandidates: discovery.external.map((x) => x.name), searched: searchedFromAttempts(attempts) })')
+          p.write_text(s)
+
+          p=Path('README.md'); s=p.read_text()
+          start=s.index('## Software metabolism')
+          end=s.index('## Install')
+          section=r'''## Software metabolism
+
+Capability 0.9 treats the existing software world as an **ability substrate**.
+
+The central question is no longer only "which tools were wired into this agent?" It is:
+
+> **Can the agent turn software that already exists into a defensible ability when the need appears?**
+
+The released architecture separates discovery, source/artifact evidence, binding, authority, isolation and receipts. A useful upstream project does not have to adopt Capability first.
+
+The 0.8 Forge path remains the outcome-first automatic route for npm-backed JavaScript/TypeScript software:
+
+```bash
+cap solve "convert separated text to camel case" \
+  --input '{"args":["hello capability world"]}' \
+  --approve
+```
+
+```text
+no matching tool
+      ↓
+search native abilities
+      ↓
+reject a plausible-but-wrong near match
+      ↓
+search existing software
+      ↓
+find an untouched GitHub/npm project
+      ↓
+mine a useful operation
+      ↓
+bind exact package + source revision
+      ↓
+generate private Capability
+      ↓
+explicit authority + Docker
+      ↓
+result + receipt
+```
+
+Capability 0.9 expands that model by **execution substrate instead of individual integration**. One generalized binder is intended to unlock a class of software.
+
+### Metabolic coverage
+
+```bash
+cap coverage
+```
+
+The reference implementation now has concrete paths for:
+
+- **Capability-native packages** — federated inert contracts and ordinary verified execution;
+- **npm / Node** — automatic software-world discovery plus GitHub Forge for root-callable JS/TS exports and npm CLIs;
+- **PyPI / Python** — explicit package selection, exact SHA256-verified universal wheel mining, private function/console-script binding, and network-denied Docker execution from the exact wheel bytes;
+- **OCI / Docker** — image tags resolved to immutable `RepoDigest` identities and run through a hardened, network-denied-by-default container boundary;
+- **MCP** — unchanged MCP servers imported as conservative Capability contracts;
+- **OpenAPI** — existing service operations imported into policy-controlled contracts;
+- **arbitrary GitHub repositories** — exact-commit source/docs/tests/examples mining across multiple languages, remaining non-executable until a real binder exists;
+- **runtime composition** — schema-compatible Capability contracts synthesized into a composite manifest with union authority and per-step receipts;
+- **capability gaps** — unresolved outcomes turned into machine-readable specifications that can scaffold the next Capability project.
+
+Examples:
+
+```bash
+# Python: mine and execute exact verified wheel bytes
+cap pypi-mine inflection --query "camelize text"
+cap pypi-forge inflection \
+  --query "camelize text" \
+  --symbol camelize \
+  --execute '{"args":["hello_world"]}' \
+  --approve
+
+# OCI: execute an immutable container artifact
+cap oci-inspect busybox:1.36
+cap oci-run busybox:1.36 echo capability-oci-ok --approve
+
+# Compose abilities that did not exist as one tool
+cap compose-intent "normalize text then slugify text" \
+  --input '{"text":"  Hello   Capability World  "}'
+
+# Turn failure into a buildable missing-ability specification
+cap gap "perform a missing operation" --out missing.json
+cap build-gap missing.json ./missing-capability
+```
+
+`cap metabolize` provides the higher-level entry point. npm/GitHub discovery can begin from the outcome alone; PyPI and OCI currently require an explicit package/image locator because the reference runtime will not pretend those registries provide a trustworthy semantic search interface when they do not.
+
+```bash
+cap metabolize "camelize separated text" \
+  --python inflection \
+  --input '{"args":["hello_world"]}' \
+  --approve
+```
+
+The public binder API (`MetabolicBinder`, `MetabolicBinderRegistry`) is intentionally extensible. New substrate support should be generalized enough to work on unrelated projects without adding project-specific cases to Capability core.
+
+**Metabolism is not trust.** Exact hashes/digests prove which bytes were selected, not that the bytes are benign. External bindings remain authority-incomplete unless stronger evidence proves otherwise; missing effect evidence never means an effect is absent; generated external abilities keep opaque authority visible; Docker is a stronger boundary, not an absolute hostile-code sandbox.
+
+See [METABOLISM.md](./METABOLISM.md) and [BINDERS.md](./BINDERS.md).
+
+'''
+          p.write_text(s[:start]+section+s[end:])
+
+          p=Path('CHANGELOG.md'); s=p.read_text()
+          if '## 0.9.0' not in s:
+              entry=r'''## 0.9.0
+
+- introduce the software-metabolism layer and `cap coverage`, reporting concrete substrate support instead of an invented percentage of all software
+- add a generalized `MetabolicBinder` interface and registry so one substrate binder can unlock unrelated projects without project-specific core integrations
+- add artifact-first PyPI/Python support: verify universal wheel bytes against PyPI SHA256, mine AST/console-script metadata without importing package code, store the exact wheel, pin the Python base image by digest, build with `--no-index --no-deps` and Docker networking disabled, then execute with network denied and receipt the artifact hash
+- add OCI image binding/execution: resolve mutable image tags to immutable `RepoDigest` identities, require approval, deny network by default, use read-only filesystems, drop capabilities, enable `no-new-privileges`, and apply resource limits
+- add `cap metabolize`, `cap pypi-inspect`, `cap pypi-mine`, `cap pypi-forge`, `cap oci-inspect`, and `cap oci-run`
+- add explicit-intent composition through `cap compose-intent`: discover candidates per step, reject known schema contradictions, synthesize a composite manifest, union authority, and preserve a receipt for every executed step
+- add machine-readable `CapabilityGap` records and `capability-gap.schema.json`; `cap gap --out` can preserve an unresolved need and `cap build-gap` turns that specification into a normal Capability project without pretending the implementation already exists
+- add MCP bootstrap primitives `capability_metabolize`, `capability_compose`, and `capability_coverage`
+- publish dedicated metabolism/binder APIs and documentation while preserving the core rule that discovery, inference, artifact identity, authority, isolation, and correctness are separate claims
+
+'''
+              s=s.replace('# Changelog\n\n','# Changelog\n\n'+entry)
+          p.write_text(s)
+
+          p=Path('test/metabolism.test.mjs'); s=p.read_text()
+          if 'pypi coverage is explicit' not in s:
+              s += r'''
+
+test("pypi coverage is explicit and default gaps only claim searches that actually ran", () => {
+  const report = metabolicCoverage();
+  assert.equal(report.entries.find((entry) => entry.substrate === "pypi").discovery, "explicit");
+  assert.equal(report.entries.find((entry) => entry.substrate === "composition").binding, "automatic");
+  const gap = createCapabilityGap("missing");
+  assert.equal(gap.searched.includes("pypi"), false);
+  assert.equal(gap.searched.includes("oci"), false);
+});
+'''
+          p.write_text(s)
+          PY
+          npm install --ignore-scripts
+          npm run registry:check
+          npm test
+      - name: Commit semantics and docs
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add src/metabolism.ts README.md CHANGELOG.md test/metabolism.test.mjs
+          git commit -m 'Document Capability 0.9 metabolic coverage precisely'
+          git push origin HEAD:main
