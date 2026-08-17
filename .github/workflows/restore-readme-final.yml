@@ -1,0 +1,24 @@
+name: Restore Capability README Final
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/restore-readme-final.yml']
+permissions:
+  contents: write
+jobs:
+  restore:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+      - name: Restore README
+        run: git show 4713564d472d6450235f041557a35cd112aad573:README.md > README.md
+      - name: Commit restoration
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add README.md
+          git commit -m 'Restore Capability README after metadata maintenance'
+          git push origin HEAD:main
