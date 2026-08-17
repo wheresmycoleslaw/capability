@@ -26,6 +26,18 @@ REUSE / COMPOSE
 
 The unit of expansion is an **execution substrate**, not an individual repository. One generalized binder should unlock a class of existing software. The public `MetabolicBinder` interface and registry are documented in [BINDERS.md](./BINDERS.md).
 
+## What “universal” means here
+
+Capability 0.9 completes the **general architecture and feedback loop** for software metabolism; it does not claim that the reference implementation can execute every useful function in every software project.
+
+A new software ecosystem should normally be added by implementing a generalized substrate binder rather than changing the protocol itself. The reference implementation proves several materially different substrates and leaves unsupported repository surfaces non-executable instead of fabricating a binding.
+
+```text
+universal architecture
+≠
+universal implementation coverage
+```
+
 ## Capability 0.9 coverage
 
 Run:
