@@ -27,7 +27,13 @@ jobs:
               body=text.split(start,1)[1].split(end,1)[0]
               lines=body.splitlines()
               return '\n'.join((line[10:] if line.startswith('          ') else line) for line in lines).lstrip('\n')+'\n'
-          Path('src/metabolism.ts').write_text(extract("          cat > src/metabolism.ts <<'EOF'\n","\n          EOF\n"))
+          source=extract("          cat > src/metabolism.ts <<'EOF'\n","\n          EOF\n")
+          source=source.replace('CompositionStep', 'MetabolicCompositionStep')
+          source=source.replace('effects: manifest.effects ?? [] } };', 'effects: [...(manifest.effects ?? [])] } };')
+          source=source.replace('solved.discovery.external.map((entry) => entry.title)', 'solved.discovery.external.map((entry) => entry.name)')
+          source=source.replace('discovery.native.map((x) => x.capability.manifest.id)', 'discovery.native.map((x) => x.id)')
+          source=source.replace('discovery.external.map((x) => x.title)', 'discovery.external.map((x) => x.name)')
+          Path('src/metabolism.ts').write_text(source)
           Path('/tmp/mutate.py').write_text(extract("          python - <<'PY'\n","\n          PY\n"))
           tail=text.split("          cat > test/metabolism.test.mjs <<'EOF'\n",1)[1]
           Path('test/metabolism.test.mjs').write_text('\n'.join((line[10:] if line.startswith('          ') else line) for line in tail.split("\n          EOF\n",1)[0].splitlines())+'\n')
