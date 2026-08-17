@@ -28,7 +28,7 @@ The unit of expansion is an **execution substrate**, not an individual repositor
 
 ## What “universal” means here
 
-Capability 0.9 completes the **general architecture and feedback loop** for software metabolism; it does not claim that the reference implementation can execute every useful function in every software project.
+Capability 1.0 stabilizes the **general architecture and feedback loop** for software metabolism behind a public 1.x compatibility contract; it does not claim that the reference implementation can execute every useful function in every software project.
 
 A new software ecosystem should normally be added by implementing a generalized substrate binder rather than changing the protocol itself. The reference implementation proves several materially different substrates and leaves unsupported repository surfaces non-executable instead of fabricating a binding.
 
@@ -38,7 +38,7 @@ universal architecture
 universal implementation coverage
 ```
 
-## Capability 0.9 coverage
+## Capability 1.0 coverage
 
 Run:
 
@@ -92,7 +92,7 @@ The upstream project does not need to adopt Capability or be modified.
 
 ## PyPI / Python
 
-Capability 0.9 adds an artifact-first Python binder.
+Capability 1.0 adds an artifact-first Python binder.
 
 ```bash
 cap pypi-inspect inflection

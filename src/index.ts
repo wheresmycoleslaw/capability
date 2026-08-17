@@ -40,3 +40,5 @@ export * from "./binders.js";
 export * from "./default-binders.js";
 export * from "./metabolic-compose.js";
 export * from "./gap-scaffold.js";
+export * from "./protocol.js";
+export * from "./conformance.js";

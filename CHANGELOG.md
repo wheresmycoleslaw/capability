@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.0.0
+
+- declare the Capability 1.x public compatibility line and publish an explicit stability contract instead of treating 1.0 as a cosmetic package-version milestone
+- harden the generalized `MetabolicBinder` boundary: executable bindings now require a versioned envelope, immutable artifact identity, binding time, evidence, and truthful authority completeness
+- enforce incomplete-authority approval centrally in `MetabolicBinderRegistry`, so third-party binders cannot accidentally bypass the minimum 1.x authority invariant
+- add a stable substrate-neutral metabolic execution receipt that preserves binder/substrate identity, exact artifact, authority, evidence, timing, isolation and optional upstream receipts
+- add runtime validation plus JSON Schemas for 1.0 metabolic bindings and receipts, and add a machine-readable schema for native Capability receipts
+- add `capabilityProtocolInfo()`, 1.x compatibility helpers, `runProtocolConformance()`, `assertProtocolConformance()`, and `runBinderConformance()`
+- add `stability-lock.json` and release tests that prevent locked package exports, MCP bootstrap tools, documented CLI commands, or format versions from silently disappearing during 1.x
+- add dedicated STABILITY and CONFORMANCE documentation and rewrite the specification as the stable 1.x protocol contract while retaining independent deployed document-format versions
+- update generated adopter projects to target `^1.0.0` and update MCP server identity to 1.0.0
+- preserve the 0.9 metabolism architecture and released proofs across npm/GitHub Forge, exact-wheel PyPI/Python, immutable OCI, repository mining, MCP/OpenAPI, runtime composition and machine-readable capability gaps
+
 ## 0.9.0
 
 - introduce the software-metabolism layer and `cap coverage`, reporting concrete substrate support instead of an invented percentage of all software
