@@ -2,6 +2,10 @@ name: Capability 1.0 Release Contract
 
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/v1-release-contract.yml
   workflow_run:
     workflows: ["Publish"]
     types: [completed]
@@ -12,7 +16,7 @@ permissions:
 
 jobs:
   released-contract:
-    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event_name == 'push' || github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -105,8 +109,9 @@ jobs:
           NODE
       - name: Prove 1.0 scaffolds 1.x adopters from the released CLI
         run: |
-          VERSION=$(cat .release)
-          npx -y "@wheresmycoleslaw/capability@$VERSION" create /tmp/cap-v1-adopter --name cap-v1-adopter --id proof/run --description "Capability 1.0 released-package adopter proof."
+          CAP=/tmp/capability-v1-consumer/node_modules/.bin/cap
+          test -x "$CAP"
+          "$CAP" create /tmp/cap-v1-adopter --name cap-v1-adopter --id proof/run --description "Capability 1.0 released-package adopter proof."
           grep -q '"@wheresmycoleslaw/capability": "\^1.0.0"' /tmp/cap-v1-adopter/package.json
-          npx -y "@wheresmycoleslaw/capability@$VERSION" readiness /tmp/cap-v1-adopter/package.json > /tmp/cap-v1-readiness.json
+          "$CAP" readiness /tmp/cap-v1-adopter/package.json > /tmp/cap-v1-readiness.json
           grep -q '"ok": true' /tmp/cap-v1-readiness.json
