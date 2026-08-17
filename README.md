@@ -30,9 +30,15 @@ PUBLIC INDEX / FEDERATION
 
 ## Software metabolism
 
-Capability 0.8.1 can start with an outcome the agent has **no matching tool for**, discover ordinary software that already solves it, understand an untouched repository, turn a selected operation into a private Capability, and execute its first run in Docker with a receipt.
+Capability 0.9 treats the existing software world as an **ability substrate**.
 
-The released-package smoke proves this without naming a package or repository:
+The central question is no longer only "which tools were wired into this agent?" It is:
+
+> **Can the agent turn software that already exists into a defensible ability when the need appears?**
+
+The architecture separates discovery, source/artifact evidence, binding, authority, isolation and receipts. A useful upstream project does not have to adopt Capability first.
+
+The Forge path remains the outcome-first automatic route for npm-backed JavaScript/TypeScript software:
 
 ```bash
 cap solve "convert separated text to camel case" \
@@ -41,54 +47,85 @@ cap solve "convert separated text to camel case" \
 ```
 
 ```text
-request begins with no camelCase tool
-        ↓
-search native Capability contracts
-        ↓
-reject text/normalize: plausible text match, wrong intent
-        ↓
+no matching tool
+      ↓
+search native abilities
+      ↓
+reject a plausible-but-wrong near match
+      ↓
 search existing software
-        ↓
-discover sindresorhus/camelcase
-        ↓
-mine the untouched repository
-        ↓
-discover camelCase()
-        ↓
-bind camelcase@9.0.0 ↔ npm gitHead ↔ exact Git commit
-        ↓
-generate a private Capability sidecar
-        ↓
-keep custom:external.opaque-effects visible
-        ↓
-explicit approval + Docker first run
-        ↓
-"hello capability world" → "helloCapabilityWorld"
-        ↓
-receipt: succeeded
+      ↓
+find an untouched GitHub/npm project
+      ↓
+mine a useful operation
+      ↓
+bind exact package + source revision
+      ↓
+generate private Capability
+      ↓
+explicit authority + Docker
+      ↓
+result + receipt
 ```
 
-**No package name. No repository name. No prewired camelCase tool. No upstream Capability integration.**
+Capability 0.9 expands that model by **execution substrate instead of individual integration**. One generalized binder is intended to unlock a class of software.
 
-The upstream project was not modified and did not need to know Capability existed. This is a constrained first implementation of **software metabolism for agents**: the agent can acquire a new executable ability from the existing software world during the same session in which it discovers that it needs it.
-
-The automatic Forge boundary is intentionally narrower than repository mining: today it can bind npm CLI entry points and root-callable JavaScript/TypeScript npm exports. Other mined languages and surfaces remain non-executable evidence until a real binder exists.
-
-
-## Metabolic coverage
-
-Capability 0.9 generalizes acquisition by **execution substrate**, not individual integration. One binder is intended to unlock a class of existing software.
+### Metabolic coverage
 
 ```bash
 cap coverage
-cap pypi-mine inflection --query "camelize text"
-cap pypi-forge inflection --query "camelize text" --symbol camelize --execute '{"args":["hello_world"]}' --approve
-cap oci-inspect busybox:1.36
-cap oci-run busybox:1.36 echo "hello from an immutable container ability" --approve
-cap metabolize "desired outcome" --python inflection --input '{"args":["hello_world"]}' --approve
 ```
 
-The supported substrate families now include native Capability packages, npm/Node exports and CLIs, PyPI/Python wheel functions and console scripts, OCI images, MCP, OpenAPI, and arbitrary repository evidence mining. Capability also emits machine-readable capability gaps when an outcome cannot be resolved instead of pretending a weak match is success. See [METABOLISM.md](./METABOLISM.md).
+The reference implementation now has concrete paths for:
+
+- **Capability-native packages** — federated inert contracts and ordinary verified execution;
+- **npm / Node** — automatic software-world discovery plus GitHub Forge for root-callable JS/TS exports and npm CLIs;
+- **PyPI / Python** — explicit package selection, exact SHA256-verified universal wheel mining, private function/console-script binding, and network-denied Docker execution from the exact wheel bytes;
+- **OCI / Docker** — image tags resolved to immutable `RepoDigest` identities and run through a hardened, network-denied-by-default container boundary;
+- **MCP** — unchanged MCP servers imported as conservative Capability contracts;
+- **OpenAPI** — existing service operations imported into policy-controlled contracts;
+- **arbitrary GitHub repositories** — exact-commit source/docs/tests/examples mining across multiple languages, remaining non-executable until a real binder exists;
+- **runtime composition** — schema-compatible Capability contracts synthesized into a composite manifest with union authority and per-step receipts;
+- **capability gaps** — unresolved outcomes turned into machine-readable specifications that can scaffold the next Capability project.
+
+Examples:
+
+```bash
+# Python: mine and execute exact verified wheel bytes
+cap pypi-mine inflection --query "camelize text"
+cap pypi-forge inflection \
+  --query "camelize text" \
+  --symbol camelize \
+  --execute '{"args":["hello_world"]}' \
+  --approve
+
+# OCI: execute an immutable container artifact
+cap oci-inspect busybox:1.36
+cap oci-run busybox:1.36 echo capability-oci-ok --approve
+
+# Compose abilities that did not exist as one tool
+cap compose-intent "normalize text then slugify text" \
+  --input '{"text":"  Hello   Capability World  "}'
+
+# Turn failure into a buildable missing-ability specification
+cap gap "perform a missing operation" --out missing.json
+cap build-gap missing.json ./missing-capability
+```
+
+`cap metabolize` provides the higher-level entry point. npm/GitHub discovery can begin from the outcome alone; PyPI and OCI currently require an explicit package/image locator because the reference runtime will not pretend those registries provide a trustworthy semantic search interface when they do not.
+
+```bash
+cap metabolize "camelize separated text" \
+  --python inflection \
+  --input '{"args":["hello_world"]}' \
+  --approve
+```
+
+The public binder API (`MetabolicBinder`, `MetabolicBinderRegistry`) is intentionally extensible. New substrate support should be generalized enough to work on unrelated projects without adding project-specific cases to Capability core.
+
+**Metabolism is not trust.** Exact hashes/digests prove which bytes were selected, not that the bytes are benign. External bindings remain authority-incomplete unless stronger evidence proves otherwise; missing effect evidence never means an effect is absent; generated external abilities keep opaque authority visible; Docker is a stronger boundary, not an absolute hostile-code sandbox.
+
+See [METABOLISM.md](./METABOLISM.md) and [BINDERS.md](./BINDERS.md).
 
 ## Install
 

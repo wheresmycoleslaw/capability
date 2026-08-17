@@ -31,12 +31,12 @@ export function metabolicCoverage(): { version: typeof CAPABILITY_METABOLISM_VER
     entries: [
       { substrate: "native", discovery: "automatic", mining: "contract", binding: "native", firstExecution: "normal", notes: "Federated inert Capability contracts." },
       { substrate: "npm", discovery: "automatic", mining: "source", binding: "automatic", firstExecution: "docker", notes: "Root-callable JavaScript/TypeScript exports and npm CLIs through Forge." },
-      { substrate: "pypi", discovery: "automatic", mining: "artifact", binding: "automatic", firstExecution: "docker", notes: "Universal Python wheel functions and console scripts; exact wheel bytes are SHA256-verified, stored with the binding, and executed with no dependency/network drift." },
+      { substrate: "pypi", discovery: "explicit", mining: "artifact", binding: "automatic", firstExecution: "docker", notes: "Universal Python wheel functions and console scripts; exact wheel bytes are SHA256-verified, stored with the binding, and executed with no dependency/network drift." },
       { substrate: "oci", discovery: "explicit", mining: "metadata", binding: "automatic", firstExecution: "container", notes: "OCI/Docker images are pinned to an immutable RepoDigest and exposed as command capabilities." },
       { substrate: "mcp", discovery: "explicit", mining: "contract", binding: "automatic", firstExecution: "external", notes: "Existing MCP tools become Capability contracts without upstream changes." },
       { substrate: "openapi", discovery: "explicit", mining: "contract", binding: "automatic", firstExecution: "external", notes: "OpenAPI operations become Capability contracts." },
       { substrate: "repository", discovery: "automatic", mining: "source", binding: "planned", firstExecution: "none", notes: "Evidence mining spans more languages than automatic execution binders." },
-      { substrate: "composition", discovery: "derived", mining: "contract", binding: "planned", firstExecution: "normal", notes: "Schema-compatible contracts can be planned into pipelines; each step keeps its own authority boundary." },
+      { substrate: "composition", discovery: "derived", mining: "contract", binding: "automatic", firstExecution: "normal", notes: "Schema-compatible contracts can be planned into pipelines; each step keeps its own authority boundary." },
       { substrate: "gap", discovery: "derived", mining: "contract", binding: "none", firstExecution: "none", notes: "Unresolved outcomes become machine-readable missing-capability specifications." }
     ]
   };
@@ -66,7 +66,7 @@ export function createCapabilityGap(intent: string, options: Partial<CapabilityG
       effectsCeiling: options.effectsCeiling ?? [],
       verification: options.verification ?? ["Output must satisfy the requested outcome and declared output contract."]
     },
-    searched: options.searched ?? ["native", "npm", "pypi", "repository", "composition"],
+    searched: options.searched ?? ["native", "npm", "repository", "composition"],
     evidence: {
       nativeCandidates: options.nativeCandidates ?? [],
       externalCandidates: options.externalCandidates ?? [],
@@ -166,6 +166,12 @@ export async function executeOciImage(reference: string, args: readonly string[]
 }
 
 export type MetabolizeResult = { intent: string; route: MetabolicSubstrate; result?: unknown; receipt?: unknown; gap?: CapabilityGap; attempts: { substrate: MetabolicSubstrate; ok: boolean; detail: string }[] };
+
+function searchedFromAttempts(attempts: MetabolizeResult["attempts"]): MetabolicSubstrate[] {
+  const searched: MetabolicSubstrate[] = ["native", "npm", "repository", "composition"];
+  for (const substrate of ["pypi", "oci"] as const) if (attempts.some((attempt) => attempt.substrate === substrate)) searched.push(substrate);
+  return searched;
+}
 export async function metabolizeIntent(intent: string, options: { input?: unknown; approved?: boolean; indexes?: readonly string[]; pythonPackage?: string; pythonVersion?: string; ociImage?: string; ociArgs?: string[]; externalOnly?: boolean; allowUnverifiedSource?: boolean } = {}): Promise<MetabolizeResult> {
   const attempts: MetabolizeResult["attempts"] = [];
   if (options.ociImage) {
@@ -184,10 +190,10 @@ export async function metabolizeIntent(intent: string, options: { input?: unknow
     attempts.push({ substrate: solved.route === "native" ? "native" : solved.route === "forged" ? "npm" : "repository", ok: solved.route !== "unresolved", detail: solved.route });
     if (solved.route !== "unresolved") return { intent, route: solved.route === "native" ? "native" : "npm", result: solved, receipt: solved.native?.receipt ?? solved.forged?.receipt, attempts };
     const external = solved.discovery.external.map((entry) => entry.name).slice(0, 10);
-    return { intent, route: "gap", gap: createCapabilityGap(intent, { externalCandidates: external, searched: ["native", "npm", "repository", "composition"] }), attempts };
+    return { intent, route: "gap", gap: createCapabilityGap(intent, { externalCandidates: external, searched: searchedFromAttempts(attempts) }), attempts };
   } catch (error) {
     attempts.push({ substrate: "npm", ok: false, detail: error instanceof Error ? error.message : String(error) });
     const discovery = await discoverSoftwareWorld(intent, { indexes: options.indexes ?? [DEFAULT_CAPABILITY_INDEX_URL], limit: 10 });
-    return { intent, route: "gap", gap: createCapabilityGap(intent, { nativeCandidates: discovery.native.map((x) => x.id), externalCandidates: discovery.external.map((x) => x.name), searched: ["native", "npm", "repository", "composition"] }), attempts };
+    return { intent, route: "gap", gap: createCapabilityGap(intent, { nativeCandidates: discovery.native.map((x) => x.id), externalCandidates: discovery.external.map((x) => x.name), searched: searchedFromAttempts(attempts) }), attempts };
   }
 }

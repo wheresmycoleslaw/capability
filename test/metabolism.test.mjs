@@ -26,3 +26,13 @@ test("gap is machine-readable and conservative", () => {
   assert.equal(gap.status,"unresolved");
   assert.deepEqual(gap.required.effectsCeiling,["filesystem.read"]);
 });
+
+
+test("pypi coverage is explicit and default gaps only claim searches that actually ran", () => {
+  const report = metabolicCoverage();
+  assert.equal(report.entries.find((entry) => entry.substrate === "pypi").discovery, "explicit");
+  assert.equal(report.entries.find((entry) => entry.substrate === "composition").binding, "automatic");
+  const gap = createCapabilityGap("missing");
+  assert.equal(gap.searched.includes("pypi"), false);
+  assert.equal(gap.searched.includes("oci"), false);
+});

@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.9.0
+
+- introduce the software-metabolism layer and `cap coverage`, reporting concrete substrate support instead of an invented percentage of all software
+- add a generalized `MetabolicBinder` interface and registry so one substrate binder can unlock unrelated projects without project-specific core integrations
+- add artifact-first PyPI/Python support: verify universal wheel bytes against PyPI SHA256, mine AST/console-script metadata without importing package code, store the exact wheel, pin the Python base image by digest, build with `--no-index --no-deps` and Docker networking disabled, then execute with network denied and receipt the artifact hash
+- add OCI image binding/execution: resolve mutable image tags to immutable `RepoDigest` identities, require approval, deny network by default, use read-only filesystems, drop capabilities, enable `no-new-privileges`, and apply resource limits
+- add `cap metabolize`, `cap pypi-inspect`, `cap pypi-mine`, `cap pypi-forge`, `cap oci-inspect`, and `cap oci-run`
+- add explicit-intent composition through `cap compose-intent`: discover candidates per step, reject known schema contradictions, synthesize a composite manifest, union authority, and preserve a receipt for every executed step
+- add machine-readable `CapabilityGap` records and `capability-gap.schema.json`; `cap gap --out` preserves an unresolved need and `cap build-gap` turns that specification into a normal Capability project without pretending the implementation already exists
+- add MCP bootstrap primitives `capability_metabolize`, `capability_compose`, and `capability_coverage`
+- publish dedicated metabolism/binder APIs and documentation while preserving the core rule that discovery, inference, artifact identity, authority, isolation, and correctness are separate claims
+
 ## 0.8.1
 
 - fix intent-first Forge execution from automatically created temp directories: Docker runs forged code as a non-root UID, while `mkdtemp` creates 0700 roots; Forge now makes only the generated root traversable (0755) before first-run isolation
