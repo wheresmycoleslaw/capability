@@ -1,6 +1,7 @@
 import { forgeGitHubAbility, activateForgedAbility } from "./forge.js";
 import { executeOciImage, executePyPiAbility, forgePyPiAbility, inspectOciImage } from "./metabolism.js";
 import { MetabolicBinderRegistry, type BinderExecution, type MetabolicBinder, type MetabolicBinding } from "./binders.js";
+import type { JsonValue } from "./types.js";
 
 export type GitHubForgeRequest = {
   repository: string;
@@ -51,9 +52,10 @@ export const githubForgeBinder: MetabolicBinder<GitHubForgeRequest, GitHubForgeB
   },
   async execute(binding, input, context = {}): Promise<BinderExecution> {
     const receipt = await activateForgedAbility(binding.forged, input, { approved: context.approved === true });
+    const output = receipt.output === undefined ? undefined : JSON.parse(JSON.stringify(receipt.output)) as JsonValue;
     return {
       status: receipt.status === "succeeded" ? "succeeded" : "failed",
-      output: receipt.output,
+      ...(output !== undefined ? { output } : {}),
       receipt: JSON.parse(JSON.stringify(receipt))
     };
   }
