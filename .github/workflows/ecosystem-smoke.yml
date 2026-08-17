@@ -20,12 +20,27 @@ jobs:
         with:
           node-version: 25
           registry-url: https://registry.npmjs.org
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
       - run: npm install --global npm@11
       - name: Install released CLI
         run: |
           VERSION=$(cat .release)
           npm install --global "@wheresmycoleslaw/capability@$VERSION"
       - run: cap doctor
+      - name: Report metabolic coverage
+        run: |
+          cap coverage > /tmp/coverage.json
+          grep -q '"substrate": "native"' /tmp/coverage.json
+          grep -q '"substrate": "npm"' /tmp/coverage.json
+          grep -q '"substrate": "pypi"' /tmp/coverage.json
+          grep -q '"substrate": "oci"' /tmp/coverage.json
+          grep -q '"substrate": "mcp"' /tmp/coverage.json
+          grep -q '"substrate": "openapi"' /tmp/coverage.json
+          grep -q '"substrate": "repository"' /tmp/coverage.json
+          grep -q '"substrate": "composition"' /tmp/coverage.json
+          grep -q '"substrate": "gap"' /tmp/coverage.json
       - name: Search beyond the Capability registry
         run: |
           cap world "typescript compiler" --no-github --limit 3 > /tmp/world.json
@@ -51,6 +66,46 @@ jobs:
           grep -q '"route": "forged"' /tmp/solve.json
           grep -q 'helloCapabilityWorld' /tmp/solve.json
           grep -q '"status": "succeeded"' /tmp/solve.json
+      - name: Mine and execute an unchanged PyPI package from exact wheel bytes
+        run: |
+          cap pypi-mine inflection --query "camelize text" > /tmp/pypi-mine.json
+          grep -q '"symbol": "camelize"' /tmp/pypi-mine.json
+          cap pypi-forge inflection --query "camelize text" --symbol camelize --execute '{"args":["hello_world"]}' --approve > /tmp/pypi-run.json
+          grep -q '"artifactVerified": true' /tmp/pypi-run.json
+          grep -q '"network": "none"' /tmp/pypi-run.json
+          grep -q '"dependencyPolicy": "no-deps"' /tmp/pypi-run.json
+          grep -q '@sha256:' /tmp/pypi-run.json
+          grep -q 'HelloWorld' /tmp/pypi-run.json
+      - name: Metabolize an explicitly selected Python substrate
+        run: |
+          cap metabolize "camelize separated text" --python inflection --input '{"args":["hello_world"]}' --approve > /tmp/metabolize-python.json
+          grep -q '"route": "pypi"' /tmp/metabolize-python.json
+          grep -q '"artifactVerified": true' /tmp/metabolize-python.json
+          grep -q 'HelloWorld' /tmp/metabolize-python.json
+      - name: Bind and execute an immutable OCI image
+        run: |
+          cap oci-inspect busybox:1.36 > /tmp/oci-inspect.json
+          grep -q '@sha256:' /tmp/oci-inspect.json
+          cap oci-run busybox:1.36 echo capability-oci-ok --approve > /tmp/oci-run.json
+          grep -q '"status": "succeeded"' /tmp/oci-run.json
+          grep -q '@sha256:' /tmp/oci-run.json
+          grep -q 'capability-oci-ok' /tmp/oci-run.json
+      - name: Synthesize and execute a multi-capability pipeline
+        run: |
+          cap compose-intent "normalize text then slugify text" --input '{"text":"  Hello   Capability World  "}' > /tmp/composition.json
+          grep -q '"route": "composition"' /tmp/composition.json
+          grep -q 'text/normalize' /tmp/composition.json
+          grep -q 'text/slugify' /tmp/composition.json
+          grep -q 'hello-capability-world' /tmp/composition.json
+          grep -q '"receipts"' /tmp/composition.json
+      - name: Turn an unresolved ability into a buildable project
+        run: |
+          cap gap "perform a deliberately unresolved proof operation" --effect filesystem.read --out /tmp/gap.json > /tmp/gap.stdout.json
+          grep -q '"status": "unresolved"' /tmp/gap.json
+          grep -q 'filesystem.read' /tmp/gap.json
+          cap build-gap /tmp/gap.json /tmp/gap-project --force > /tmp/gap-project.json
+          test -f /tmp/gap-project/capability-gap.json
+          grep -q 'capability-gap.json' /tmp/gap-project/package.json
       - name: Inspect an existing npm package without installing it
         run: |
           cap npm-inspect typescript > /tmp/npm-inspect.json
@@ -82,12 +137,16 @@ jobs:
           grep -q 'capability_mine_repository' /tmp/mcp.jsonl
           grep -q 'capability_forge_repository' /tmp/mcp.jsonl
           grep -q 'capability_solve' /tmp/mcp.jsonl
+          grep -q 'capability_metabolize' /tmp/mcp.jsonl
+          grep -q 'capability_compose' /tmp/mcp.jsonl
+          grep -q 'capability_coverage' /tmp/mcp.jsonl
           grep -q 'capability_probe_site' /tmp/mcp.jsonl
       - name: Import an unchanged MCP server as Capability contracts
         run: |
           cap mcp-import cap mcp-serve --namespace bootstrap > /tmp/mcp-import.json
           grep -q 'bootstrap/capability_search_world' /tmp/mcp-import.json
           grep -q 'bootstrap/capability_solve' /tmp/mcp-import.json
+          grep -q 'bootstrap/capability_metabolize' /tmp/mcp-import.json
           grep -q 'custom:mcp.opaque-effects' /tmp/mcp-import.json
       - name: Discover new agent-native capability
         run: |
