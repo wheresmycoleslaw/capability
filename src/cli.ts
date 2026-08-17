@@ -28,6 +28,7 @@ import { createNpmCliBridgeDescriptor, scaffoldNpmCliBridgeProject } from "./bri
 import { connectStdioMcpCapabilities } from "./mcp-import.js";
 import { mineGitHubRepository } from "./repository-mine.js";
 import { activateForgedAbility, forgeGitHubAbility, solveSoftwareIntent } from "./forge.js";
+import { createCapabilityGap, executeOciImage, executePyPiAbility, forgePyPiAbility, inspectOciImage, inspectPyPiPackage, metabolizeIntent, metabolicCoverage, minePyPiArtifact, planComposition } from "./metabolism.js";
 
 function usage(): never {
   console.error(`capability CLI
@@ -44,6 +45,14 @@ Discovery and interoperability:
   cap mine github <owner/repo|url> [--ref <git-ref>] [--query <text>] [--limit <n>] [--max-files <n>] [--max-file-bytes <n>] [--out <path>]
   cap forge github <owner/repo|url> [--query <text>] [--symbol <name>] [--candidate <id>] [--directory <path>] [--execute <json>] [--approve] [--allow-unverified-source]
   cap solve <query> [--input <json>] [--approve] [--external] [--directory <path>] [--allow-unverified-source] [--index <url>]
+  cap metabolize <query> [--input <json>] [--approve] [--python <package>] [--python-version <version>] [--oci <image>] [--oci-arg <arg>...] [--external] [--index <url>]
+  cap pypi-inspect <package> [--version <version>]
+  cap pypi-mine <package> [--version <version>] [--query <text>]
+  cap pypi-forge <package> [--version <version>] [--query <text>] [--module <module>] [--symbol <symbol>] [--execute <json>] [--approve]
+  cap oci-inspect <image>
+  cap oci-run <image> [args...] --approve [--network]
+  cap coverage
+  cap gap <intent> [--effect <effect>...]
   cap npm-inspect <package> [--version <exact>]
   cap mcp-import <command> [command-args...] [--namespace <name>] [--version <semver>] [--effects-complete]
   cap probe <site>
@@ -166,6 +175,84 @@ async function main() {
   const [, , command, ...rawArgs] = process.argv;
   if (!command) usage();
   const args = [...rawArgs];
+
+  if (command === "coverage") {
+  if (args.length) usage();
+  console.log(JSON.stringify(metabolicCoverage(), null, 2));
+  return;
+}
+
+if (command === "gap") {
+  const effects = takeOptions(args, "--effect") as CapabilityEffect[];
+  const intent = args.join(" ").trim();
+  if (!intent) usage();
+  console.log(JSON.stringify(createCapabilityGap(intent, { effectsCeiling: effects }), null, 2));
+  return;
+}
+
+if (command === "pypi-inspect") {
+  const version = takeOption(args, "--version");
+  const name = args.shift() ?? usage();
+  if (args.length) usage();
+  console.log(JSON.stringify(await inspectPyPiPackage(name, version), null, 2));
+  return;
+}
+
+if (command === "pypi-mine") {
+  const version = takeOption(args, "--version");
+  const query = takeOption(args, "--query");
+  const name = args.shift() ?? usage();
+  if (args.length) usage();
+  console.log(JSON.stringify(await minePyPiArtifact(name, { version, query }), null, 2));
+  return;
+}
+
+if (command === "pypi-forge") {
+  const version = takeOption(args, "--version");
+  const query = takeOption(args, "--query");
+  const module = takeOption(args, "--module");
+  const symbol = takeOption(args, "--symbol");
+  const executeRaw = takeOption(args, "--execute");
+  const approve = takeFlag(args, "--approve");
+  const name = args.shift() ?? usage();
+  if (args.length) usage();
+  const forged = await forgePyPiAbility(name, { version, query, module, symbol });
+  const receipt = executeRaw !== undefined ? await executePyPiAbility(forged, parseJson(executeRaw) as { args?: unknown[]; kwargs?: Record<string, unknown> }, { approved: approve }) : undefined;
+  console.log(JSON.stringify({ ...forged, ...(receipt ? { receipt } : {}) }, null, 2));
+  return;
+}
+
+if (command === "oci-inspect") {
+  const image = args.shift() ?? usage();
+  if (args.length) usage();
+  console.log(JSON.stringify(await inspectOciImage(image), null, 2));
+  return;
+}
+
+if (command === "oci-run") {
+  const approve = takeFlag(args, "--approve");
+  const network = takeFlag(args, "--network");
+  const image = args.shift() ?? usage();
+  console.log(JSON.stringify(await executeOciImage(image, args, { approved: approve, network }), null, 2));
+  return;
+}
+
+if (command === "metabolize") {
+  const inputRaw = takeOption(args, "--input");
+  const approve = takeFlag(args, "--approve");
+  const pythonPackage = takeOption(args, "--python");
+  const pythonVersion = takeOption(args, "--python-version");
+  const ociImage = takeOption(args, "--oci");
+  const ociArgs = takeOptions(args, "--oci-arg");
+  const externalOnly = takeFlag(args, "--external");
+  const indexes = liveIndexes(args);
+  const query = args.join(" ").trim();
+  if (!query) usage();
+  const result = await metabolizeIntent(query, { indexes, ...(inputRaw !== undefined ? { input: parseJson(inputRaw) } : {}), approved: approve, pythonPackage, pythonVersion, ociImage, ociArgs, externalOnly });
+  console.log(JSON.stringify(result, null, 2));
+  process.exitCode = result.route === "gap" ? 2 : 0;
+  return;
+}
 
   if (command === "mcp-serve") {
     const index = takeOption(args, "--index");

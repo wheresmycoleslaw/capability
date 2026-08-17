@@ -1,7 +1,7 @@
 {
   "name": "@wheresmycoleslaw/capability",
-  "version": "0.8.1",
-  "description": "An open runtime for agents to search the software world, mine arbitrary repositories, forge exact artifact-bound abilities on demand, inspect authority, isolate execution, and keep receipts.",
+  "version": "0.9.0",
+  "description": "A software-metabolism runtime for agents to discover, mine, bind, compose, isolate, and acquire abilities from existing software across multiple execution substrates.",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -89,6 +89,10 @@
     "./forge": {
       "types": "./dist/forge.d.ts",
       "import": "./dist/forge.js"
+    },
+    "./metabolism": {
+      "types": "./dist/metabolism.d.ts",
+      "import": "./dist/metabolism.js"
     }
   },
   "files": [
@@ -108,7 +112,8 @@
     "UNIVERSAL.md",
     "capability-bridge.schema.json",
     "REPOSITORY_MINING.md",
-    "FORGE.md"
+    "FORGE.md",
+    "METABOLISM.md"
   ],
   "sideEffects": false,
   "scripts": {
@@ -154,7 +159,14 @@
     "runtime-acquisition",
     "self-expanding-agents",
     "on-demand-tools",
-    "software-metabolism"
+    "software-metabolism",
+    "pypi",
+    "python-agents",
+    "oci",
+    "container-tools",
+    "capability-composition",
+    "capability-gap",
+    "universal-software"
   ],
   "license": "MIT",
   "repository": {

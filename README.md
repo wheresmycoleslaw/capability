@@ -74,6 +74,22 @@ The upstream project was not modified and did not need to know Capability existe
 
 The automatic Forge boundary is intentionally narrower than repository mining: today it can bind npm CLI entry points and root-callable JavaScript/TypeScript npm exports. Other mined languages and surfaces remain non-executable evidence until a real binder exists.
 
+
+## Metabolic coverage
+
+Capability 0.9 generalizes acquisition by **execution substrate**, not individual integration. One binder is intended to unlock a class of existing software.
+
+```bash
+cap coverage
+cap pypi-mine inflection --query "camelize text"
+cap pypi-forge inflection --query "camelize text" --symbol camelize --execute '{"args":["hello_world"]}' --approve
+cap oci-inspect busybox:1.36
+cap oci-run busybox:1.36 echo "hello from an immutable container ability" --approve
+cap metabolize "desired outcome" --python inflection --input '{"args":["hello_world"]}' --approve
+```
+
+The supported substrate families now include native Capability packages, npm/Node exports and CLIs, PyPI/Python wheel functions and console scripts, OCI images, MCP, OpenAPI, and arbitrary repository evidence mining. Capability also emits machine-readable capability gaps when an outcome cannot be resolved instead of pretending a weak match is success. See [METABOLISM.md](./METABOLISM.md).
+
 ## Install
 
 ```bash
