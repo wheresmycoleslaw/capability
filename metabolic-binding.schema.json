@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/wheresmycoleslaw/capability/blob/main/metabolic-binding.schema.json",
+  "title": "Capability 1.x Metabolic Binding",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["bindingVersion", "binderId", "substrate", "locator", "immutableArtifact", "createdAt", "authority", "evidence"],
+  "properties": {
+    "bindingVersion": { "const": "1.0" },
+    "binderId": { "type": "string", "minLength": 1 },
+    "substrate": { "type": "string", "minLength": 1 },
+    "locator": { "type": "string", "minLength": 1 },
+    "immutableArtifact": { "type": "string", "minLength": 1 },
+    "createdAt": { "type": "string", "format": "date-time" },
+    "authority": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["complete", "effects"],
+      "properties": {
+        "complete": { "type": "boolean" },
+        "effects": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "anyOf": [
+              { "enum": ["filesystem.read", "filesystem.write", "network.connect", "process.spawn", "environment.read", "secrets.read", "database.read", "database.write", "email.send", "git.commit", "git.push"] },
+              { "type": "string", "pattern": "^custom:[a-z0-9][a-z0-9._/-]*$" }
+            ]
+          }
+        },
+        "note": { "type": "string" }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "complete": { "const": false } }, "required": ["complete"] },
+          "then": { "properties": { "effects": { "contains": { "const": "custom:external.opaque-effects" } } } }
+        }
+      ]
+    },
+    "evidence": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } },
+    "metadata": { "type": "object" }
+  }
+}

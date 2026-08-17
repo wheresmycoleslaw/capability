@@ -3,7 +3,7 @@ import { constants } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
 import { validatePackageDeclaration, type PackageJsonWithCapabilities } from "./package.js";
 
-const CAPABILITY_RUNTIME_VERSION = "^0.9.0";
+const CAPABILITY_RUNTIME_VERSION = "^1.0.0";
 
 type ScaffoldOptions = {
   directory: string;

@@ -2,7 +2,7 @@
 
 **Executable abilities for agents: discover first, inspect and authorize before execution, verify what was acquired, and keep a receipt.**
 
-`@wheresmycoleslaw/capability` is an experimental TypeScript standard, runtime, CLI, developer kit, and federated public index for self-describing executable capabilities.
+`@wheresmycoleslaw/capability` is the stable Capability 1.x protocol and reference runtime: a TypeScript runtime, CLI, developer kit, federated discovery layer, and generalized software-metabolism boundary for agents. The public 1.x contracts are stable; executing untrusted external software remains security-sensitive and threat-model dependent.
 
 ```text
 PUBLIC INDEX / FEDERATION
@@ -28,9 +28,21 @@ PUBLIC INDEX / FEDERATION
       ROLLBACK?
 ```
 
+## Capability 1.0 stability
+
+Capability 1.0 freezes the load-bearing public contracts for the 1.x line. New substrate binders, tools, effects and discovery systems can be added without redesigning the protocol. Incompatible changes to the stable package exports, binder envelope, authority/artifact invariants, MCP bootstrap surface, or documented command semantics require a new major version.
+
+Run the network-free protocol conformance suite with:
+
+```bash
+npm run conformance
+```
+
+See [STABILITY.md](./STABILITY.md) and [CONFORMANCE.md](./CONFORMANCE.md).
+
 ## Software metabolism
 
-Capability 0.9 treats the existing software world as an **ability substrate**.
+Capability 1.0 treats the existing software world as an **ability substrate**.
 
 The central question is no longer only "which tools were wired into this agent?" It is:
 
@@ -68,7 +80,7 @@ explicit authority + Docker
 result + receipt
 ```
 
-Capability 0.9 expands that model by **execution substrate instead of individual integration**. One generalized binder is intended to unlock a class of software.
+Capability 1.0 expands that model by **execution substrate instead of individual integration**. One generalized binder is intended to unlock a class of software.
 
 ### Metabolic coverage
 

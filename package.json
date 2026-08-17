@@ -1,7 +1,7 @@
 {
   "name": "@wheresmycoleslaw/capability",
-  "version": "0.9.0",
-  "description": "A software-metabolism runtime for agents to discover, mine, bind, compose, isolate, and acquire abilities from existing software across multiple execution substrates.",
+  "version": "1.0.0",
+  "description": "The stable Capability 1.x software-metabolism protocol and reference runtime for agents to discover, bind, authorize, isolate, compose, and acquire abilities from existing software.",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -113,6 +113,14 @@
     "./gap-scaffold": {
       "types": "./dist/gap-scaffold.d.ts",
       "import": "./dist/gap-scaffold.js"
+    },
+    "./protocol": {
+      "types": "./dist/protocol.d.ts",
+      "import": "./dist/protocol.js"
+    },
+    "./conformance": {
+      "types": "./dist/conformance.d.ts",
+      "import": "./dist/conformance.js"
     }
   },
   "files": [
@@ -135,7 +143,13 @@
     "FORGE.md",
     "METABOLISM.md",
     "BINDERS.md",
-    "capability-gap.schema.json"
+    "capability-gap.schema.json",
+    "STABILITY.md",
+    "CONFORMANCE.md",
+    "stability-lock.json",
+    "metabolic-binding.schema.json",
+    "metabolic-execution-receipt.schema.json",
+    "capability-receipt.schema.json"
   ],
   "sideEffects": false,
   "scripts": {
@@ -145,7 +159,8 @@
     "registry:validate": "npm run build && node scripts/validate-registry.mjs",
     "test": "npm run build && npm run registry:check && node --test test/*.test.mjs",
     "check": "npm test && npm pack --dry-run",
-    "clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\""
+    "clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\"",
+    "conformance": "npm run build && node --input-type=module -e \"import('./dist/conformance.js').then(async m => m.assertProtocolConformance())\""
   },
   "keywords": [
     "ai",

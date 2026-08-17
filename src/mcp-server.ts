@@ -4,7 +4,7 @@ import { CapabilityNetworkMcpBridge } from "./network-mcp.js";
 
 const MODERN_VERSION = "2026-07-28";
 const LEGACY_VERSIONS = ["2025-11-25", "2025-06-18", "2025-03-26", "2024-11-05"] as const;
-const SERVER_INFO = { name: "capability-network", version: "0.8.0" };
+const SERVER_INFO = { name: "capability-network", version: "1.0.0" };
 const bridge = new CapabilityNetworkMcpBridge({ indexes: process.env.CAPABILITY_INDEX ? [process.env.CAPABILITY_INDEX] : undefined });
 
 type JsonRpcId = string | number | null;
@@ -31,7 +31,7 @@ async function handle(request: JsonRpcRequest) {
     return result(id, {
       supportedVersions: [MODERN_VERSION],
       capabilities: { tools: {} },
-      instructions: "Use capability_search for native abilities, capability_search_world to discover existing software, capability_mine_repository to inspect source without executing it, capability_forge_repository to bind a selected operation to an exact artifact, or capability_solve to go from an outcome to a native/forged ability. Review authority before any execution.",
+      instructions: "Capability 1.x exposes stable discovery and metabolism contracts. Use capability_search for native abilities, capability_search_world to discover existing software, capability_mine_repository to inspect source without executing it, capability_forge_repository to bind a selected operation to an exact artifact, or capability_solve to go from an outcome to a native/forged ability. Review authority before any execution.",
       _meta: modernMeta()
     });
   }
