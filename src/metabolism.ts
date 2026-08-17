@@ -7,6 +7,9 @@ import { CapabilityHub, DEFAULT_CAPABILITY_INDEX_URL } from "./ecosystem.js";
 import { discoverSoftwareWorld } from "./external-discovery.js";
 import { solveSoftwareIntent } from "./forge.js";
 import { validateManifest } from "./manifest.js";
+import { executePyPiAbility, forgePyPiAbility, inspectPyPiPackage, minePyPiArtifact } from "./pypi.js";
+export { executePyPiAbility, forgePyPiAbility, inspectPyPiPackage, minePyPiArtifact } from "./pypi.js";
+export type { PyPiInspection, PythonCandidate, PythonExecutionReceipt, PythonForge, PythonMiningReport } from "./pypi.js";
 import type { CapabilityEffect, CapabilityManifest, CapabilityReceipt, JsonValue } from "./types.js";
 
 export const CAPABILITY_METABOLISM_VERSION = "0.1" as const;
@@ -28,7 +31,7 @@ export function metabolicCoverage(): { version: typeof CAPABILITY_METABOLISM_VER
     entries: [
       { substrate: "native", discovery: "automatic", mining: "contract", binding: "native", firstExecution: "normal", notes: "Federated inert Capability contracts." },
       { substrate: "npm", discovery: "automatic", mining: "source", binding: "automatic", firstExecution: "docker", notes: "Root-callable JavaScript/TypeScript exports and npm CLIs through Forge." },
-      { substrate: "pypi", discovery: "automatic", mining: "artifact", binding: "automatic", firstExecution: "docker", notes: "Pure-Python wheel functions and console scripts; artifact SHA256 is verified before mining." },
+      { substrate: "pypi", discovery: "automatic", mining: "artifact", binding: "automatic", firstExecution: "docker", notes: "Universal Python wheel functions and console scripts; exact wheel bytes are SHA256-verified, stored with the binding, and executed with no dependency/network drift." },
       { substrate: "oci", discovery: "explicit", mining: "metadata", binding: "automatic", firstExecution: "container", notes: "OCI/Docker images are pinned to an immutable RepoDigest and exposed as command capabilities." },
       { substrate: "mcp", discovery: "explicit", mining: "contract", binding: "automatic", firstExecution: "external", notes: "Existing MCP tools become Capability contracts without upstream changes." },
       { substrate: "openapi", discovery: "explicit", mining: "contract", binding: "automatic", firstExecution: "external", notes: "OpenAPI operations become Capability contracts." },
@@ -160,87 +163,6 @@ export async function executeOciImage(reference: string, args: readonly string[]
   const startedAt = new Date().toISOString();
   const execution = await run(docker, ["run", "--rm", "--read-only", "--cap-drop=ALL", "--security-opt=no-new-privileges:true", "--pids-limit=64", "--memory=512m", "--cpus=1", `--network=${options.network ? "bridge" : "none"}`, inspection.immutableReference, ...args], { timeoutMs: options.timeoutMs ?? 120_000 });
   return { substrate: "oci", image: reference, immutableReference: inspection.immutableReference, args: [...args], status: execution.code === 0 ? "succeeded" : "failed", stdout: execution.stdout, stderr: execution.stderr, startedAt, finishedAt: new Date().toISOString() };
-}
-
-type PyPiFile = { filename: string; url: string; packagetype: string; digests?: { sha256?: string }; yanked?: boolean; size?: number };
-export type PyPiInspection = { name: string; version: string; summary?: string; requiresPython?: string; projectUrls: Record<string, string>; wheel: { filename: string; url: string; sha256: string; size?: number }; vulnerabilities: unknown[] };
-export async function inspectPyPiPackage(name: string, version?: string, fetchImpl: typeof fetch = fetch): Promise<PyPiInspection> {
-  const endpoint = `https://pypi.org/pypi/${encodeURIComponent(name)}${version ? `/${encodeURIComponent(version)}` : ""}/json`;
-  const response = await fetchImpl(endpoint, { headers: { accept: "application/json" } });
-  if (!response.ok) throw new Error(`PyPI inspection failed: HTTP ${response.status}`);
-  const data = await response.json() as Record<string, any>;
-  const info = data.info ?? {};
-  const urls = (Array.isArray(data.urls) ? data.urls : []) as PyPiFile[];
-  const wheel = urls.filter((file) => file.packagetype === "bdist_wheel" && !file.yanked && file.digests?.sha256).sort((a, b) => Number((/py3-none-any|py2.py3-none-any/i.test(b.filename))) - Number((/py3-none-any|py2.py3-none-any/i.test(a.filename))))[0];
-  if (!wheel?.digests?.sha256) throw new Error(`${info.name ?? name}@${info.version ?? version ?? "latest"} has no non-yanked wheel with SHA256; automatic Python forging currently requires a wheel artifact`);
-  const projectUrls: Record<string, string> = {};
-  if (info.project_urls && typeof info.project_urls === "object") for (const [key, value] of Object.entries(info.project_urls)) if (typeof value === "string") projectUrls[key] = value;
-  return { name: String(info.name ?? name), version: String(info.version ?? version ?? ""), ...(typeof info.summary === "string" ? { summary: info.summary } : {}), ...(typeof info.requires_python === "string" ? { requiresPython: info.requires_python } : {}), projectUrls, wheel: { filename: wheel.filename, url: wheel.url, sha256: wheel.digests.sha256, ...(typeof wheel.size === "number" ? { size: wheel.size } : {}) }, vulnerabilities: Array.isArray(data.vulnerabilities) ? data.vulnerabilities : [] };
-}
-
-async function downloadVerified(url: string, expectedSha256: string, fetchImpl: typeof fetch): Promise<Uint8Array> {
-  const response = await fetchImpl(url); if (!response.ok) throw new Error(`Artifact download failed: HTTP ${response.status}`);
-  const bytes = new Uint8Array(await response.arrayBuffer());
-  const actual = createHash("sha256").update(bytes).digest("hex");
-  if (actual !== expectedSha256) throw new Error(`Artifact SHA256 mismatch: expected ${expectedSha256}, got ${actual}`);
-  return bytes;
-}
-
-export type PythonCandidate = { module: string; symbol: string; kind: "function" | "console-script"; score: number; evidence: string[] };
-export type PythonMiningReport = { artifact: PyPiInspection; candidates: PythonCandidate[]; filesAnalyzed: number; notes: string[] };
-export async function minePyPiArtifact(name: string, options: { version?: string; query?: string; fetch?: typeof fetch; maxFiles?: number } = {}): Promise<PythonMiningReport> {
-  const fetchImpl = options.fetch ?? fetch;
-  const artifact = await inspectPyPiPackage(name, options.version, fetchImpl);
-  const bytes = await downloadVerified(artifact.wheel.url, artifact.wheel.sha256, fetchImpl);
-  const temp = await mkdtemp(join(tmpdir(), "cap-pypi-mine-"));
-  const wheelPath = join(temp, artifact.wheel.filename); await writeFile(wheelPath, bytes);
-  const script = String.raw`import ast, json, re, sys, zipfile\nwheel, query, max_files = sys.argv[1], sys.argv[2].lower(), int(sys.argv[3])\ntokens=[x for x in re.split(r'[^a-z0-9]+', query) if len(x)>1]\nout=[]; analyzed=0; scripts=[]\nwith zipfile.ZipFile(wheel) as z:\n  for name in z.namelist():\n    if name.endswith('.dist-info/entry_points.txt'):\n      text=z.read(name).decode('utf-8','replace'); section=''\n      for line in text.splitlines():\n        line=line.strip()\n        if line.startswith('['): section=line.strip('[]')\n        elif section=='console_scripts' and '=' in line:\n          left,right=line.split('=',1); target=right.strip().split(':',1); scripts.append({'module':target[0].strip(),'symbol':target[1].strip() if len(target)>1 else '__main__','kind':'console-script','score':1.0,'evidence':['wheel entry_points.txt console_scripts']})\n  for name in z.namelist():\n    if analyzed>=max_files: break\n    if not name.endswith('.py') or '.dist-info/' in name or name.startswith('test'): continue\n    try: text=z.read(name).decode('utf-8'); tree=ast.parse(text)\n    except Exception: continue\n    analyzed+=1; module=name[:-3].replace('/','.')\n    if module.endswith('.__init__'): module=module[:-9]\n    for node in tree.body:\n      if isinstance(node,(ast.FunctionDef,ast.AsyncFunctionDef)) and not node.name.startswith('_'):\n        doc=ast.get_docstring(node) or ''; hay=(node.name+' '+doc+' '+module).lower(); matched=[t for t in tokens if t in hay]; score=(len(matched)/len(tokens) if tokens else 0.5) + (0.2 if doc else 0)\n        out.append({'module':module,'symbol':node.name,'kind':'function','score':round(score,4),'evidence':[f'{name}:{getattr(node,"lineno",1)}', doc[:240]]})\nout.extend(scripts)\nout.sort(key=lambda x:(-x['score'],x['module'],x['symbol']))\nprint(json.dumps({'candidates':out[:100],'filesAnalyzed':analyzed}))`;
-  const result = await run("python", ["-c", script, wheelPath, options.query ?? "", String(options.maxFiles ?? 120)], { timeoutMs: 30_000 });
-  if (result.code !== 0) throw new Error(result.stderr || "Python wheel mining failed");
-  const parsed = JSON.parse(result.stdout) as { candidates: PythonCandidate[]; filesAnalyzed: number };
-  return { artifact, candidates: parsed.candidates, filesAnalyzed: parsed.filesAnalyzed, notes: ["Wheel bytes were SHA256-verified before AST mining.", "Mining parses Python source from the wheel without importing or executing the package.", "Authority is incomplete until runtime observation or upstream declaration."] };
-}
-
-export type PythonForge = { substrate: "pypi"; artifact: PyPiInspection; candidate: PythonCandidate; directory: string; capabilityId: string; authority: { complete: false; effects: CapabilityEffect[] } };
-export async function forgePyPiAbility(name: string, options: { version?: string; query?: string; module?: string; symbol?: string; directory?: string; fetch?: typeof fetch } = {}): Promise<PythonForge> {
-  const report = await minePyPiArtifact(name, options);
-  let candidate = report.candidates.find((entry) => (!options.module || entry.module === options.module) && (!options.symbol || entry.symbol === options.symbol));
-  candidate ??= report.candidates[0]; if (!candidate) throw new Error(`No public Python operation discovered in ${name}`);
-  const directory = resolve(options.directory ?? await mkdtemp(join(tmpdir(), "cap-python-forge-")));
-  const capabilityId = `forged/python/${slug(report.artifact.name)}/${slug(candidate.symbol)}`;
-  const manifest: CapabilityManifest = {
-    specVersion: "0.1", id: capabilityId, version: "1.0.0", name: `${candidate.symbol} — Python forged`,
-    description: `Artifact-bound Python ability for ${candidate.module}:${candidate.symbol} from ${report.artifact.name}@${report.artifact.version}.`,
-    input: { type: "object", properties: { args: { type: "array", items: {} }, kwargs: { type: "object" } }, required: ["args"] },
-    output: { type: "object", properties: { result: {} }, required: ["result"] },
-    effects: ["process.spawn", "custom:external.opaque-effects"], behavior: { deterministic: false, idempotent: false, reversible: false },
-    tags: ["forged", "python", "pypi", "artifact-bound"], metadata: { forged: true, substrate: "pypi", package: report.artifact.name, packageVersion: report.artifact.version, artifactSha256: report.artifact.wheel.sha256, module: candidate.module, symbol: candidate.symbol, authorityComplete: false }
-  };
-  const issues = validateManifest(manifest); if (issues.length) throw new Error(`Generated Python manifest invalid: ${issues.join("; ")}`);
-  const descriptor = { metabolismVersion: CAPABILITY_METABOLISM_VERSION, substrate: "pypi", artifact: report.artifact, candidate, manifest, authority: { complete: false, effects: [...(manifest.effects ?? [])] } };
-  await run("mkdir", ["-p", directory]);
-  await writeFile(join(directory, "capability.python.json"), `${JSON.stringify(descriptor, null, 2)}\n`);
-  return { substrate: "pypi", artifact: report.artifact, candidate, directory, capabilityId, authority: { complete: false, effects: [...(manifest.effects ?? [])] } };
-}
-
-export type PythonExecutionReceipt = { substrate: "pypi"; package: string; version: string; artifactSha256: string; module: string; symbol: string; status: "succeeded" | "failed"; result?: JsonValue; stderr?: string; startedAt: string; finishedAt: string };
-export async function executePyPiAbility(forged: PythonForge, input: { args?: unknown[]; kwargs?: Record<string, unknown> }, options: { approved?: boolean; dockerCommand?: string; timeoutMs?: number } = {}): Promise<PythonExecutionReceipt> {
-  if (!options.approved) throw new Error("Python forged first execution requires explicit approval");
-  const docker = options.dockerCommand ?? "docker";
-  const startedAt = new Date().toISOString();
-  const program = String.raw`import importlib, json, sys\nenv=json.loads(sys.stdin.read() or '{}')\nmod=importlib.import_module(env['module']); fn=getattr(mod, env['symbol']); value=fn(*(env.get('args') or []), **(env.get('kwargs') or {})); print(json.dumps({'result': value}, default=str))`;
-  const envelope = JSON.stringify({ module: forged.candidate.module, symbol: forged.candidate.symbol, args: input.args ?? [], kwargs: input.kwargs ?? {} });
-  const command = ["run", "--rm", "-i", "--network=none", "--read-only", "--cap-drop=ALL", "--security-opt=no-new-privileges:true", "--pids-limit=64", "--memory=512m", "--cpus=1", "--tmpfs", "/tmp:rw,nosuid,nodev,noexec,size=64m", "python:3.12-slim", "sh", "-lc", `python -m pip install --disable-pip-version-check --no-deps --no-cache-dir '${forged.artifact.name}==${forged.artifact.version}' >/dev/null 2>&1 && python -c ${JSON.stringify(program)}`];
-  // Installing requires a network. Keep installation in a throwaway image namespace, then execute with network disabled in a committed temporary image.
-  const buildTag = `cap-pypi-${slug(forged.artifact.name)}-${Date.now()}`;
-  const dockerfile = `FROM python:3.12-slim\nRUN python -m pip install --disable-pip-version-check --no-cache-dir ${JSON.stringify(`${forged.artifact.name}==${forged.artifact.version}`)}\n`;
-  const build = await run(docker, ["build", "--network=default", "-t", buildTag, "-"], { input: dockerfile, timeoutMs: options.timeoutMs ?? 180_000 });
-  if (build.code !== 0) throw new Error(build.stderr || "Python forge Docker build failed");
-  const exec = await run(docker, ["run", "--rm", "-i", "--network=none", "--read-only", "--cap-drop=ALL", "--security-opt=no-new-privileges:true", "--pids-limit=64", "--memory=512m", "--cpus=1", "--tmpfs", "/tmp:rw,nosuid,nodev,noexec,size=64m", buildTag, "python", "-c", program], { input: envelope, timeoutMs: options.timeoutMs ?? 120_000 });
-  await run(docker, ["image", "rm", "-f", buildTag], { timeoutMs: 30_000 });
-  if (exec.code !== 0) return { substrate: "pypi", package: forged.artifact.name, version: forged.artifact.version, artifactSha256: forged.artifact.wheel.sha256, module: forged.candidate.module, symbol: forged.candidate.symbol, status: "failed", stderr: exec.stderr, startedAt, finishedAt: new Date().toISOString() };
-  const parsed = JSON.parse(exec.stdout) as { result: JsonValue };
-  return { substrate: "pypi", package: forged.artifact.name, version: forged.artifact.version, artifactSha256: forged.artifact.wheel.sha256, module: forged.candidate.module, symbol: forged.candidate.symbol, status: "succeeded", result: parsed.result, startedAt, finishedAt: new Date().toISOString() };
 }
 
 export type MetabolizeResult = { intent: string; route: MetabolicSubstrate; result?: unknown; receipt?: unknown; gap?: CapabilityGap; attempts: { substrate: MetabolicSubstrate; ok: boolean; detail: string }[] };

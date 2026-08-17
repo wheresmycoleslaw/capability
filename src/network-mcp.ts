@@ -3,6 +3,8 @@ import { discoverSoftwareWorld } from "./external-discovery.js";
 import { probeCapabilitySite } from "./web-discovery.js";
 import { mineGitHubRepository } from "./repository-mine.js";
 import { activateForgedAbility, forgeGitHubAbility, solveSoftwareIntent } from "./forge.js";
+import { metabolizeIntent, metabolicCoverage } from "./metabolism.js";
+import { composeIntent } from "./metabolic-compose.js";
 
 export type NetworkMcpTool = {
   name: string;
@@ -88,6 +90,27 @@ const tools: readonly NetworkMcpTool[] = [
       required: ["query"]
     },
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true }
+  },
+  {
+    name: "capability_metabolize",
+    title: "Metabolize Existing Software",
+    description: "Start from an outcome and acquire a defensible ability through native Capability, npm/GitHub Forge, an explicitly selected PyPI package, or an OCI image. External bindings remain authority-incomplete and require approval for first execution.",
+    inputSchema: { type: "object", properties: { query: { type: "string" }, input: {}, approved: { type: "boolean", default: false }, pythonPackage: { type: "string" }, pythonVersion: { type: "string" }, ociImage: { type: "string" }, ociArgs: { type: "array", items: { type: "string" } }, externalOnly: { type: "boolean", default: false } }, required: ["query"] },
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true }
+  },
+  {
+    name: "capability_compose",
+    title: "Compose Capability Pipeline",
+    description: "Split an explicit multi-step intent, discover candidate Capability contracts for each step, require schema-compatible boundaries, synthesize a composite manifest and optionally execute the pipeline with a receipt for every step.",
+    inputSchema: { type: "object", properties: { intent: { type: "string" }, input: {}, approved: { type: "boolean", default: false } }, required: ["intent"] },
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true }
+  },
+  {
+    name: "capability_coverage",
+    title: "Capability Metabolic Coverage",
+    description: "Report which software substrate families Capability can currently discover, mine, bind and execute, without inventing a percentage of all software.",
+    inputSchema: { type: "object", properties: {} },
+    annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false }
   },
   {
     name: "capability_inspect",
@@ -192,6 +215,26 @@ export class CapabilityNetworkMcpBridge {
           allowUnverifiedSource: args.allowUnverifiedSource === true
         }));
       }
+      if (name === "capability_metabolize") {
+        const query = typeof args.query === "string" ? args.query : "";
+        if (!query) throw new TypeError("query is required");
+        return textResult(await metabolizeIntent(query, {
+          indexes: this.indexes,
+          ...(args.input !== undefined ? { input: args.input } : {}),
+          approved: args.approved === true,
+          pythonPackage: typeof args.pythonPackage === "string" ? args.pythonPackage : undefined,
+          pythonVersion: typeof args.pythonVersion === "string" ? args.pythonVersion : undefined,
+          ociImage: typeof args.ociImage === "string" ? args.ociImage : undefined,
+          ociArgs: Array.isArray(args.ociArgs) ? args.ociArgs.filter((value): value is string => typeof value === "string") : undefined,
+          externalOnly: args.externalOnly === true
+        }));
+      }
+      if (name === "capability_compose") {
+        const intent = typeof args.intent === "string" ? args.intent : "";
+        if (!intent) throw new TypeError("intent is required");
+        return textResult(await composeIntent(intent, { indexes: this.indexes, ...(args.input !== undefined ? { input: args.input } : {}), approved: args.approved === true }));
+      }
+      if (name === "capability_coverage") return textResult(metabolicCoverage());
       if (name === "capability_inspect") {
         if (typeof args.id !== "string" || !args.id) throw new TypeError("id is required");
         const hub = new CapabilityHub({ indexes: this.indexes });

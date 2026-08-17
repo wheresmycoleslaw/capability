@@ -15,7 +15,7 @@ import type { CapabilityEffect, CapabilityReceipt, JsonValue } from "./types.js"
 import { sha256 } from "./utils.js";
 
 export const CAPABILITY_FORGE_VERSION = "0.1" as const;
-export const CAPABILITY_FORGE_RUNTIME_VERSION = "^0.8.1" as const;
+export const CAPABILITY_FORGE_RUNTIME_VERSION = "^0.9.0" as const;
 
 export type ForgeBindingKind = "npm-cli" | "npm-export";
 export type ForgeSourceBinding = "verified-git-head" | "unverified-source-artifact-link";

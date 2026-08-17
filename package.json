@@ -93,6 +93,26 @@
     "./metabolism": {
       "types": "./dist/metabolism.d.ts",
       "import": "./dist/metabolism.js"
+    },
+    "./pypi": {
+      "types": "./dist/pypi.d.ts",
+      "import": "./dist/pypi.js"
+    },
+    "./binders": {
+      "types": "./dist/binders.d.ts",
+      "import": "./dist/binders.js"
+    },
+    "./default-binders": {
+      "types": "./dist/default-binders.d.ts",
+      "import": "./dist/default-binders.js"
+    },
+    "./metabolic-compose": {
+      "types": "./dist/metabolic-compose.d.ts",
+      "import": "./dist/metabolic-compose.js"
+    },
+    "./gap-scaffold": {
+      "types": "./dist/gap-scaffold.d.ts",
+      "import": "./dist/gap-scaffold.js"
     }
   },
   "files": [
@@ -113,7 +133,9 @@
     "capability-bridge.schema.json",
     "REPOSITORY_MINING.md",
     "FORGE.md",
-    "METABOLISM.md"
+    "METABOLISM.md",
+    "BINDERS.md",
+    "capability-gap.schema.json"
   ],
   "sideEffects": false,
   "scripts": {

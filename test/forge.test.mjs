@@ -91,7 +91,7 @@ test("forges a mined repository function into an exact npm-backed inert capabili
   const pkg = JSON.parse(await readFile(join(directory, "package.json"), "utf8"));
   assert.equal(pkg.private, true);
   assert.equal(pkg.dependencies["@acme/text-kit"], "1.4.0");
-  assert.equal(pkg.dependencies["@wheresmycoleslaw/capability"], "^0.8.1");
+  assert.equal(pkg.dependencies["@wheresmycoleslaw/capability"], "^0.9.0");
   const manifest = pkg.capability.exports[forged.project.capabilityId].manifest;
   assert.ok(manifest.effects.includes("custom:external.opaque-effects"));
   assert.equal(manifest.metadata.upstreamCommit, forged.descriptor.repository.commit);

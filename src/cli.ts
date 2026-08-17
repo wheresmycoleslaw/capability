@@ -29,6 +29,9 @@ import { connectStdioMcpCapabilities } from "./mcp-import.js";
 import { mineGitHubRepository } from "./repository-mine.js";
 import { activateForgedAbility, forgeGitHubAbility, solveSoftwareIntent } from "./forge.js";
 import { createCapabilityGap, executeOciImage, executePyPiAbility, forgePyPiAbility, inspectOciImage, inspectPyPiPackage, metabolizeIntent, metabolicCoverage, minePyPiArtifact, planComposition } from "./metabolism.js";
+import { composeIntent } from "./metabolic-compose.js";
+import { scaffoldCapabilityGapProject } from "./gap-scaffold.js";
+import type { CapabilityGap } from "./metabolism.js";
 
 function usage(): never {
   console.error(`capability CLI
@@ -52,7 +55,9 @@ Discovery and interoperability:
   cap oci-inspect <image>
   cap oci-run <image> [args...] --approve [--network]
   cap coverage
-  cap gap <intent> [--effect <effect>...]
+  cap gap <intent> [--effect <effect>...] [--out <path>]
+  cap compose-intent <pipeline> [--input <json>] [--approve] [--index <url>]
+  cap build-gap <gap.json> <directory> [--name <package>] [--id <capability-id>] [--repo <url>] [--force]
   cap npm-inspect <package> [--version <exact>]
   cap mcp-import <command> [command-args...] [--namespace <name>] [--version <semver>] [--effects-complete]
   cap probe <site>
@@ -176,6 +181,31 @@ async function main() {
   if (!command) usage();
   const args = [...rawArgs];
 
+  if (command === "compose-intent") {
+    const inputRaw = takeOption(args, "--input");
+    const approved = takeFlag(args, "--approve");
+    const indexes = liveIndexes(args);
+    const intent = args.join(" ").trim();
+    if (!intent) usage();
+    const result = await composeIntent(intent, { indexes, ...(inputRaw !== undefined ? { input: parseJson(inputRaw) } : {}), approved });
+    console.log(JSON.stringify(result, null, 2));
+    process.exitCode = result.route === "gap" ? 2 : 0;
+    return;
+  }
+
+  if (command === "build-gap") {
+    const packageName = takeOption(args, "--name");
+    const capabilityId = takeOption(args, "--id");
+    const repository = takeOption(args, "--repo");
+    const force = takeFlag(args, "--force");
+    const gapPath = args.shift() ?? usage();
+    const directory = args.shift() ?? usage();
+    if (args.length) usage();
+    const gap = JSON.parse(await readFile(resolve(gapPath), "utf8")) as CapabilityGap;
+    console.log(JSON.stringify(await scaffoldCapabilityGapProject(gap, { directory, packageName, capabilityId, repository, force }), null, 2));
+    return;
+  }
+
   if (command === "coverage") {
   if (args.length) usage();
   console.log(JSON.stringify(metabolicCoverage(), null, 2));
@@ -184,9 +214,12 @@ async function main() {
 
 if (command === "gap") {
   const effects = takeOptions(args, "--effect") as CapabilityEffect[];
+  const out = takeOption(args, "--out");
   const intent = args.join(" ").trim();
   if (!intent) usage();
-  console.log(JSON.stringify(createCapabilityGap(intent, { effectsCeiling: effects }), null, 2));
+  const gap = createCapabilityGap(intent, { effectsCeiling: effects });
+  if (out) await writeFile(resolve(out), `${JSON.stringify(gap, null, 2)}\n`, "utf8");
+  console.log(JSON.stringify(gap, null, 2));
   return;
 }
 
