@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/wheresmycoleslaw/capability/blob/main/metabolic-execution-receipt.schema.json",
+  "title": "Capability 1.x Metabolic Execution Receipt",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["receiptVersion", "binderId", "substrate", "locator", "immutableArtifact", "status", "startedAt", "endedAt", "authority", "evidence"],
+  "properties": {
+    "receiptVersion": { "const": "1.0" },
+    "binderId": { "type": "string", "minLength": 1 },
+    "substrate": { "type": "string", "minLength": 1 },
+    "locator": { "type": "string", "minLength": 1 },
+    "immutableArtifact": { "type": "string", "minLength": 1 },
+    "status": { "enum": ["succeeded", "failed"] },
+    "startedAt": { "type": "string", "format": "date-time" },
+    "endedAt": { "type": "string", "format": "date-time" },
+    "authority": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["complete", "effects"],
+      "properties": {
+        "complete": { "type": "boolean" },
+        "effects": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "evidence": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } },
+    "isolation": { "type": "string", "minLength": 1 },
+    "upstreamReceipt": {},
+    "metadata": { "type": "object" },
+    "error": { "type": "string" }
+  }
+}

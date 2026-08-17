@@ -1,64 +1,177 @@
-# Metabolic binders
+# Metabolic Binders
 
-Capability grows by **execution substrate**, not by writing one integration per repository.
+A Capability metabolic binder adapts a **class of software** to the stable Capability 1.x execution contract.
 
-A metabolic binder answers four questions for a class of software:
+The abstraction exists so metabolic coverage grows by substrate instead of by project-specific integrations.
 
-1. **How do I identify the exact artifact?**
-2. **How do I expose one selected operation as a machine-readable ability?**
-3. **What authority can I prove, and what must remain opaque?**
-4. **What isolation boundary can execute the artifact without silently widening trust?**
+```text
+                   MetabolicBinder
+                         │
+        ┌────────────────┼────────────────┐
+        ▼                ▼                ▼
+     npm/Node         PyPI/Python        OCI
+        │                │                │
+   many projects     many packages    many images
+```
 
-The public `MetabolicBinder` interface and `MetabolicBinderRegistry` live in `src/binders.ts`.
+Future binders can target WASM, Rust binaries, Go modules/binaries, JVM/JAR, .NET assemblies, signed native packages, or execution substrates that do not exist yet.
+
+## Stable 1.x interface
 
 ```ts
-interface MetabolicBinder<Request, Binding> {
-  id: string;
-  substrate: string;
-  discovery: "automatic" | "explicit" | "derived";
-  description: string;
+export interface MetabolicBinder<
+  Request = unknown,
+  Binding extends MetabolicBinding = MetabolicBinding
+> {
+  readonly id: string;
+  readonly substrate: string;
+  readonly discovery: "automatic" | "explicit" | "derived";
+  readonly description: string;
+
   bind(request: Request): Promise<Binding>;
-  execute?(binding: Binding, input: unknown, context?: BinderExecutionContext): Promise<BinderExecution>;
+  execute?(
+    binding: Binding,
+    input: unknown,
+    context?: BinderExecutionContext
+  ): Promise<BinderExecutionPayload>;
 }
 ```
 
-A binding carries an immutable artifact identity when the substrate supports one, evidence, and an authority statement. The reference implementation intentionally keeps generated external software authority-incomplete unless a stronger source can prove otherwise.
+This is a public 1.x extension contract. Incompatible changes require a new Capability major version.
+
+## Binding is the trust boundary, not a convenience object
+
+A conformant binding must use the stable envelope:
+
+```ts
+{
+  bindingVersion: "1.0",
+  binderId: "example/wasm",
+  substrate: "wasm",
+  locator: "vendor/tool:latest",
+  immutableArtifact: "sha256:...",
+  createdAt: "...",
+  authority: {
+    complete: false,
+    effects: ["custom:external.opaque-effects"]
+  },
+  evidence: ["sha256:...", "signature:..."]
+}
+```
+
+`immutableArtifact` is required. A mutable tag, package range, branch name, floating URL or “latest” locator can be discovery input, but it is not an executable 1.x binding until the binder resolves it to an immutable identity appropriate to that substrate.
+
+Examples include:
+
+- npm package version + independently observed integrity;
+- a PyPI wheel SHA256;
+- an OCI `RepoDigest`;
+- a Git commit plus bound package artifact;
+- a WASM/component content digest;
+- a signed binary digest and signature identity.
+
+The exact identity scheme is substrate-specific. The requirement that an execution binding stop being mutable is protocol-level.
+
+## Unknown authority stays unknown
+
+If a binder cannot defensibly enumerate the complete effect surface, it must return:
+
+```ts
+authority: {
+  complete: false,
+  effects: [
+    // any observed/inferred effects,
+    "custom:external.opaque-effects"
+  ]
+}
+```
+
+Absence of evidence is not evidence of absence.
+
+The 1.x registry validates this invariant. An incomplete binding without `custom:external.opaque-effects` is rejected.
+
+## Approval is enforced outside the binder
+
+`MetabolicBinderRegistry.execute()` refuses to call a binder with incomplete authority unless explicit approval is present.
+
+This is intentional defense in depth. Individual binders may add stronger approval/policy checks, but the common registry boundary does not rely on every extension author remembering to implement the minimum invariant correctly.
+
+## Stable registry-level receipt
+
+A binder returns a low-level `BinderExecutionPayload`. The registry wraps it in a substrate-neutral `MetabolicExecutionReceipt` version `1.0` containing:
+
+- binder and substrate identity;
+- original locator;
+- immutable artifact;
+- authority state;
+- binding evidence;
+- execution status and timing;
+- isolation label, when supplied;
+- the substrate-specific upstream receipt, when supplied.
+
+This means future binders can expose rich native evidence without forcing audit systems to understand every substrate before answering the basic question: **what exact thing ran under what authority?**
 
 ## Reference binders
 
+Capability 1.0 ships reference binders for:
+
 ### npm / GitHub Forge
 
-- mines an ordinary GitHub repository;
-- selects a root-callable JavaScript/TypeScript export or npm CLI;
-- binds the published npm version and integrity;
-- prefers npm `gitHead` ↔ exact Git commit evidence;
-- preserves `custom:external.opaque-effects`;
-- requires approval and Docker for first execution.
+- software-world/GitHub discovery;
+- exact repository mining;
+- npm package identity and integrity;
+- npm `gitHead` ↔ exact Git commit binding when available;
+- generated private Capability sidecar;
+- unknown upstream effects preserved;
+- explicit approval;
+- Docker first execution.
 
-### PyPI / Python wheel
+### PyPI / Python
 
-- accepts only a non-yanked universal wheel for the automatic binder;
-- verifies the downloaded wheel bytes against PyPI SHA256 before mining;
-- parses Python AST and entry-point metadata without importing the package;
-- stores the exact verified wheel in the forged binding;
-- builds the execution image from that exact wheel with `--no-index --no-deps` and Docker build networking disabled;
-- executes with Docker networking disabled;
-- records the wheel SHA256 and immutable Python base-image digest in the receipt.
+- explicit package selection;
+- non-yanked universal wheel selection;
+- PyPI SHA256 verification;
+- source mining without importing package code;
+- exact wheel bytes retained;
+- `--no-index --no-deps` installation;
+- Docker build and runtime networking denied;
+- pinned Python base-image digest.
 
-Platform-specific wheels are deliberately rejected until a platform-aware binder can prove that the artifact matches the execution environment.
+### OCI / Docker
 
-### OCI / Docker image
+- mutable image tag resolved to immutable `RepoDigest`;
+- read-only root filesystem;
+- dropped Linux capabilities;
+- `no-new-privileges`;
+- PID/memory/CPU limits;
+- network denied by default.
 
-- pulls the requested image;
-- resolves it to an immutable `RepoDigest`;
-- executes that digest, not the mutable tag;
-- drops Linux capabilities, enables `no-new-privileges`, makes the root filesystem read-only, limits PIDs/memory/CPU, and denies network by default;
-- keeps the image's internal effects opaque.
+Artifact identity still does not prove that any of these artifacts are benign.
 
-## Adding a substrate
+## Implementing a new binder
 
-A useful binder should be generalized enough that an unrelated project using the same execution substrate can pass through it without project-specific code in Capability core.
+A new binder should answer five questions cleanly:
 
-Examples of future substrate binders include Rust/crates and binaries, Go modules/binaries, JVM artifacts, .NET assemblies, WASM modules, native package managers, and signed application bundles.
+1. **What class of software does this binder cover?**
+2. **How does a mutable discovery locator become an exact immutable artifact?**
+3. **What evidence can be gathered without prematurely executing the artifact?**
+4. **How is unknown authority represented rather than guessed away?**
+5. **What real execution/isolation boundary invokes the artifact?**
 
-The invariant is more important than the ecosystem: **discover aggressively, bind exactly, preserve uncertainty, isolate execution, receipt the result.**
+Then run it through `runBinderConformance()` from `@wheresmycoleslaw/capability/conformance`.
+
+See [CONFORMANCE.md](./CONFORMANCE.md) and [STABILITY.md](./STABILITY.md).
+
+## What not to do
+
+Do not call something a generalized binder if it:
+
+- contains special cases for individual repositories as its primary strategy;
+- defers immutable artifact resolution until after execution begins;
+- marks authority complete because static analysis did not notice an effect;
+- treats a digest as proof of safety;
+- imports/executes arbitrary code merely to discover what it might do;
+- bypasses Capability policy/approval because the substrate has its own permission system;
+- discards the exact evidence that linked discovery to execution.
+
+The purpose of the binder layer is not to make arbitrary software look safe. It is to make arbitrary software **legible enough to bind precisely and execute under an explicit boundary without lying about what remains unknown.**

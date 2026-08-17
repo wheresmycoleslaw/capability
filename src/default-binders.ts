@@ -1,6 +1,6 @@
 import { forgeGitHubAbility, activateForgedAbility } from "./forge.js";
 import { executeOciImage, executePyPiAbility, forgePyPiAbility, inspectOciImage } from "./metabolism.js";
-import { MetabolicBinderRegistry, type BinderExecution, type MetabolicBinder, type MetabolicBinding } from "./binders.js";
+import { METABOLIC_BINDING_VERSION, MetabolicBinderRegistry, type BinderExecutionPayload, type MetabolicBinder, type MetabolicBinding } from "./binders.js";
 import type { JsonValue } from "./types.js";
 
 export type GitHubForgeRequest = {
@@ -29,10 +29,12 @@ export const githubForgeBinder: MetabolicBinder<GitHubForgeRequest, GitHubForgeB
       allowUnverifiedSource: request.allowUnverifiedSource
     });
     return {
+      bindingVersion: METABOLIC_BINDING_VERSION,
       binderId: this.id,
       substrate: "npm",
       locator: request.repository,
       immutableArtifact: `${forged.descriptor.artifact.package}@${forged.descriptor.artifact.version}${forged.descriptor.artifact.integrity ? `#${forged.descriptor.artifact.integrity}` : ""}`,
+      createdAt: new Date().toISOString(),
       authority: {
         complete: false,
         effects: [
@@ -50,13 +52,14 @@ export const githubForgeBinder: MetabolicBinder<GitHubForgeRequest, GitHubForgeB
       forged
     };
   },
-  async execute(binding, input, context = {}): Promise<BinderExecution> {
+  async execute(binding, input, context = {}): Promise<BinderExecutionPayload> {
     const receipt = await activateForgedAbility(binding.forged, input, { approved: context.approved === true });
     const output = receipt.output === undefined ? undefined : JSON.parse(JSON.stringify(receipt.output)) as JsonValue;
     return {
       status: receipt.status === "succeeded" ? "succeeded" : "failed",
       ...(output !== undefined ? { output } : {}),
-      receipt: JSON.parse(JSON.stringify(receipt))
+      upstreamReceipt: JSON.parse(JSON.stringify(receipt)),
+      isolation: "docker"
     };
   }
 };
@@ -82,10 +85,12 @@ export const pypiBinder: MetabolicBinder<PyPiBinderRequest, PyPiBinding> = {
   async bind(request) {
     const forged = await forgePyPiAbility(request.package, request);
     return {
+      bindingVersion: METABOLIC_BINDING_VERSION,
       binderId: this.id,
       substrate: "pypi",
       locator: request.package,
       immutableArtifact: `${forged.artifact.name}@${forged.artifact.version}#sha256:${forged.artifact.wheel.sha256}`,
+      createdAt: new Date().toISOString(),
       authority: {
         complete: false,
         effects: forged.authority.effects,
@@ -96,12 +101,13 @@ export const pypiBinder: MetabolicBinder<PyPiBinderRequest, PyPiBinding> = {
       forged
     };
   },
-  async execute(binding, input, context = {}): Promise<BinderExecution> {
+  async execute(binding, input, context = {}): Promise<BinderExecutionPayload> {
     const receipt = await executePyPiAbility(binding.forged, input as { args?: unknown[]; kwargs?: Record<string, unknown> }, { approved: context.approved === true });
     return {
       status: receipt.status,
       ...(receipt.result !== undefined ? { output: receipt.result } : {}),
-      receipt: JSON.parse(JSON.stringify(receipt))
+      upstreamReceipt: JSON.parse(JSON.stringify(receipt)),
+      isolation: "docker-network-none"
     };
   }
 };
@@ -117,10 +123,12 @@ export const ociBinder: MetabolicBinder<OciBinderRequest, OciBinding> = {
   async bind(request) {
     const inspection = await inspectOciImage(request.image);
     return {
+      bindingVersion: METABOLIC_BINDING_VERSION,
       binderId: this.id,
       substrate: "oci",
       locator: request.image,
       immutableArtifact: inspection.immutableReference,
+      createdAt: new Date().toISOString(),
       authority: {
         complete: false,
         effects: ["process.spawn", "custom:external.opaque-effects"],
@@ -134,13 +142,14 @@ export const ociBinder: MetabolicBinder<OciBinderRequest, OciBinding> = {
       inspection
     };
   },
-  async execute(binding, input, context = {}): Promise<BinderExecution> {
+  async execute(binding, input, context = {}): Promise<BinderExecutionPayload> {
     const args = Array.isArray(input) ? input.map(String) : input && typeof input === "object" && Array.isArray((input as any).args) ? (input as any).args.map(String) : [];
     const receipt = await executeOciImage(binding.inspection.immutableReference, args, { approved: context.approved === true });
     return {
       status: receipt.status,
       output: receipt.stdout,
-      receipt: JSON.parse(JSON.stringify(receipt))
+      upstreamReceipt: JSON.parse(JSON.stringify(receipt)),
+      isolation: "oci-container-network-none"
     };
   }
 };

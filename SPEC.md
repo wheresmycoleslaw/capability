@@ -1,36 +1,75 @@
 # Capability Standard
 
-**Specification version:** 0.1  
-**Reference implementation:** 0.3.x  
-**Status:** Experimental
+**Protocol stability line:** 1.x  
+**Protocol version:** 1.0  
+**Reference implementation:** 1.0.x  
+**Status:** Stable public contract; security-sensitive reference runtime
 
-## Purpose
+Capability defines a portable unit of executable functionality and a generalized mechanism by which software agents can discover, understand, bind, authorize, isolate, execute, verify, receipt, compose, and acquire abilities from both Capability-native and existing software.
 
-Capability defines a portable unit of executable functionality that software agents and runtimes can discover, inspect, plan, authorize, execute, verify, record, compose and, where supported, roll back.
+The 1.x compatibility promise is defined in [STABILITY.md](./STABILITY.md). Structural conformance is defined in [CONFORMANCE.md](./CONFORMANCE.md).
+
+## Core invariants
+
+Capability 1.x treats the following as separate claims:
 
 ```text
-DISCOVER -> RESOLVE -> ACQUIRE -> INSPECT -> PLAN -> AUTHORIZE -> EXECUTE -> VERIFY -> RECEIPT
-                                                                                         |
-                                                                                     ROLLBACK
+DISCOVERY ≠ TRUST
+ARTIFACT IDENTITY ≠ SAFETY
+TRUST ≠ AUTHORIZATION
+AUTHORIZATION ≠ ISOLATION
+INFERENCE ≠ DECLARED FACT
 ```
 
-The standard separates a capability's declared contract from artifact trust, host authorization and execution isolation.
+A host MUST NOT infer authorization merely because software was discovered, downloaded, hashed, signed, highly ranked, or successfully executed before.
 
-## Manifest
+## Lifecycle
 
-A compliant capability MUST expose `specVersion`, a stable namespaced `id`, semantic `version`, `name`, and `description`. It SHOULD expose JSON Schema for `input` and `output`, declared `effects`, behavioral properties and discovery tags. `capability-manifest.schema.json` is the machine-readable schema.
+For native Capability packages:
 
-## Identity
+```text
+DISCOVER -> RESOLVE -> VERIFY/BIND -> ACQUIRE -> INSPECT -> PLAN -> AUTHORIZE -> ISOLATE/EXECUTE -> VERIFY -> RECEIPT
+                                                                                                           |
+                                                                                                       ROLLBACK
+```
 
-Capability IDs MUST be namespaced and match:
+For existing software:
+
+```text
+NEED -> DISCOVER SOFTWARE -> MINE EVIDENCE -> BIND EXACT ARTIFACT -> PRESERVE AUTHORITY/UNCERTAINTY -> AUTHORIZE -> ISOLATE/EXECUTE -> RECEIPT -> REUSE/COMPOSE/GAP
+```
+
+The first flow and the second flow converge on the same principles: executable code must be tied to an exact identity before execution, authority remains host-controlled, isolation is explicit, and execution leaves evidence.
+
+## Independent format versions
+
+Capability package/protocol version `1.0` does not rename every previously deployed document format.
+
+The 1.x stability line freezes the currently deployed manifest, index, site-discovery, bridge, metabolism and gap formats at their existing document versions. Those version fields evolve independently when their wire formats actually change.
+
+`capabilityProtocolInfo()` exposes the authoritative inventory.
+
+## Capability manifest
+
+A compliant manifest MUST expose:
+
+- `specVersion`;
+- stable namespaced `id`;
+- semantic capability `version`;
+- `name`;
+- `description`.
+
+It SHOULD expose JSON Schema for `input` and `output`, declared `effects`, behavioral properties and discovery tags.
+
+The stable manifest document version for Capability 1.x begins at `0.1`. `capability-manifest.schema.json` is the machine-readable schema.
+
+Capability IDs match:
 
 ```text
 ^[a-z0-9][a-z0-9._-]*(/[a-z0-9][a-z0-9._-]*)+$
 ```
 
-Plans and lockfiles bind capability ID and version.
-
-## Effects
+## Effects and authority
 
 Built-in effects are:
 
@@ -52,133 +91,181 @@ Extensions MUST use `custom:<namespace>`.
 
 A plan MAY narrow declared effects but MUST NOT add undeclared effects. Declaring an effect does not authorize it.
 
+External software whose complete effect surface is not defensibly known MUST preserve uncertainty with `custom:external.opaque-effects` at the relevant binding/contract boundary.
+
 ## Inspection
 
 Inspection MUST NOT execute capability code and MUST NOT expose its executable function.
 
-For ecosystem acquisition, a package MUST provide an inert manifest in package metadata before its executable module may be considered safely inspectable.
+For package acquisition, safely inspectable packages provide inert manifest metadata before executable modules are loaded.
+
+Repository mining is evidence gathering. A mined candidate is not a trusted executable capability merely because the miner found an export, test, route, README section, or high-confidence semantic match.
 
 ## Planning
 
-A plan binds capability ID/version, structured input, input hash, requested effects, summary, creation time, optional plan data and an integrity fingerprint. A runtime MUST reject modified plans or input after planning.
+A plan binds capability ID/version, structured input, input hash, requested effects, summary, creation time, optional plan data and an integrity fingerprint.
 
-For module-backed capabilities acquired through an isolation boundary, a planning hook SHOULD execute through the same boundary as execution rather than in the host process.
+A runtime MUST reject a plan when bound input or integrity state has changed after planning.
+
+For module-backed capabilities acquired through an isolation boundary, planning hooks SHOULD execute through the same class of boundary as execution.
 
 ## Authorization
 
-Authorization belongs to the host runtime. The reference policy supports allow, deny and explicit-approval effect patterns. Deny rules take precedence. The reference runtime denies declared effects by default.
+Authorization belongs to the host runtime.
+
+Deny rules take precedence over allow/approval rules in the reference policy. Declared effects are denied by default unless policy allows them.
+
+External metabolic bindings with incomplete authority require explicit approval at the common `MetabolicBinderRegistry` boundary in the reference implementation. Substrate-specific binders and hosts may require stronger controls.
 
 ## Validation and execution
 
-Inputs SHOULD be validated before execution and outputs SHOULD be validated after execution. The reference runtime validates a common JSON Schema subset.
+Inputs SHOULD be validated before execution and outputs SHOULD be validated afterward against declared schemas.
 
-Execution isolation is host-defined. A runtime MAY use an in-process executor for trusted code, but ecosystem clients SHOULD prefer a process/container/VM/WASM/remote boundary appropriate to the threat model.
+Execution isolation is host-defined. A host MAY use in-process execution only for code it explicitly treats as trusted. Ecosystem software SHOULD execute across a process/container/VM/WASM/remote boundary appropriate to the host threat model.
+
+The specification does not claim that Docker, Node permissions, WASM, VMs, signatures, provenance systems, or any one mechanism is universally sufficient containment for hostile code.
 
 ## Verification
 
-A capability MAY define a verification hook. Failed verification makes execution fail and is reflected in its receipt. For isolated module-backed capabilities, verification SHOULD execute through the isolation boundary.
+A capability MAY define a verification hook. Failed verification makes execution fail and is reflected in its receipt.
+
+For isolated module-backed capabilities, verification SHOULD remain inside the selected isolation boundary.
+
+Verification of artifact identity and verification of semantic correctness are different operations.
 
 ## Receipts
 
-Execution attempts produce receipts containing receipt/plan IDs, capability identity/version, status, timing, effects, hashes, optional values, verification, errors and observed provenance. Receipt storage is replaceable.
+Native Capability execution attempts produce receipts containing capability/plan identity, status, timing, effects, hashes, optional values, verification, errors and observed provenance. `capability-receipt.schema.json` documents the stable machine-readable envelope.
+
+Metabolic binder execution through the 1.x registry additionally emits a substrate-neutral `MetabolicExecutionReceipt` version `1.0` containing:
+
+- binder/substrate identity;
+- original locator;
+- immutable artifact identity;
+- authority state;
+- binding evidence;
+- status and timing;
+- optional isolation label;
+- optional substrate-specific upstream receipt.
+
+See `metabolic-execution-receipt.schema.json`.
 
 ## Rollback
 
-Rollback requires a successful receipt, `behavior.reversible === true`, an implementation, and authorization for the relevant effects. For isolated module-backed capabilities, rollback SHOULD execute through the same isolation boundary.
+Rollback requires a successful receipt, reversible behavior declaration, an implementation, and authorization for the relevant effects.
+
+A rollback mechanism MUST NOT be assumed merely because a capability is idempotent.
 
 ## Discovery
 
-Discovery SHOULD operate on inert metadata. The reference registry supports lexical discovery over IDs, names, descriptions and tags. Semantic ranking is pluggable through `DiscoveryRanker` and `EmbeddingRanker`.
+Discovery SHOULD operate on inert metadata when available.
+
+Capability supports:
+
+- native/federated Capability indexes;
+- website bootstrap through the experimental `/.well-known/capabilities` convention;
+- npm and GitHub software-world candidates;
+- arbitrary GitHub repository evidence mining;
+- OpenAPI operation import;
+- MCP server/tool import;
+- generalized metabolic substrate binders.
+
+External search results remain candidates until a defensible binding/adapter exists.
 
 ## Package convention
 
 An npm package MAY advertise capabilities through `package.json.capability`.
 
-For safe pre-execution acquisition, each export MUST use a descriptor containing:
+For safe pre-execution acquisition, each export uses a package-relative module path plus the complete inert manifest and may carry module integrity.
 
-- a package-relative `module` path;
-- the complete inert `manifest`;
-- optional module `integrity`.
+The imported implementation manifest MUST match the inert package manifest.
 
-The imported implementation manifest MUST match the inert package manifest. A string-only module export remains a compatibility form but is not sufficient for safe ecosystem acquisition.
+Legacy string-only exports remain a compatibility path but are not sufficient for safe ecosystem acquisition.
 
-## Public capability indexes
+## Public indexes and federation
 
-A public index is a static JSON document containing exact package versions, source metadata and inert capability descriptors. `capability-index.schema.json` defines the reference format.
+A public index is a static JSON document containing exact package versions, source metadata and inert capability descriptors.
 
-Indexes MAY contain `federates`: HTTP(S) URLs of other public indexes. Federation does not imply trust. Clients SHOULD bound traversal depth and index count, validate each index and de-duplicate visited URLs.
+Indexes MAY federate to other HTTP(S) indexes. Federation does not imply trust. Clients SHOULD bound traversal depth/count, validate each document and de-duplicate visited URLs.
 
-Indexes SHOULD be searchable before package installation or module import.
+Resolution MUST select exact capability/package versions before acquisition. Reproducible deployments SHOULD persist a lockfile or equivalent immutable selection record.
 
-## Resolution
-
-A resolver MUST return an exact package version and exact capability version before acquisition. The reference resolver prefers the newest semantic capability version for an exact ID, then the newest containing package version.
-
-Production clients SHOULD use a lockfile or equivalent immutable selection record when reproducibility matters.
-
-## Package installation
-
-The reference npm installer installs the exact selected package version with lifecycle scripts disabled. Installation mechanics are replaceable through `CapabilityPackageInstaller`.
+## Artifact verification and acquisition
 
 Installation alone does not establish trust.
 
-## Artifact verification
+A client MAY require registry signatures, package integrity, repository/commit metadata and provenance attestations.
 
-A client MAY require registry signatures, package integrity, source repository metadata, source commit data and provenance attestations.
+Observed artifact integrity MUST NOT be silently replaced by index-supplied integrity. A mismatch MUST fail acquisition.
 
-The reference strict npm path delegates signature and provenance verification to npm, records the results as observed provenance, and rejects acquisition when configured requirements are unmet.
+Safe acquisition MUST NOT import executable package code into the host process before the selected isolation boundary.
 
-An index-provided integrity value MUST NOT silently override an independently observed artifact integrity value. A mismatch MUST fail acquisition.
+## Metabolic binder contract
 
-## Safe acquisition
+A `MetabolicBinder` generalizes adaptation by execution substrate rather than by individual project.
 
-Safe acquisition MUST NOT import executable capability code into the host process before the isolation boundary.
+A conformant executable binding MUST provide the stable `MetabolicBinding` version `1.0` envelope with:
 
-The reference implementation constructs an inert module-backed capability from package metadata and passes source provenance to an executor. Legacy trusted/in-process loading is a separate explicit path.
+- binder ID;
+- substrate;
+- discovery locator;
+- exact immutable artifact identity;
+- binding timestamp;
+- authority completeness/effects;
+- non-empty evidence.
 
-## Isolation
+Incomplete authority MUST contain `custom:external.opaque-effects`.
 
-An executor is responsible for the actual code boundary. The reference implementation provides:
+The reference registry validates a binding both after `bind()` and before `execute()`.
 
-- `DockerExecutor`: read-only container execution with network disabled unless declared, dropped capabilities, non-root execution and resource limits;
-- `NodePermissionExecutor`: child-process execution using Node's Permission Model;
-- `AutoIsolatedExecutor`: Docker first, then a Node fallback when strict requirements can be met;
-- `InProcessExecutor`: explicit trusted-code compatibility mode.
+A mutable discovery locator is not sufficient as `immutableArtifact` merely because the binder intends to resolve it later.
 
-The specification does not claim that any reference executor is universally safe for hostile code. Hosts MUST select isolation appropriate to their environment and risk.
+See [BINDERS.md](./BINDERS.md), `metabolic-binding.schema.json`, and [CONFORMANCE.md](./CONFORMANCE.md).
 
-## Lockfiles
+## Repository mining and Forge
 
-A Capability lockfile binds:
+Repository mining resolves an exact source revision and may correlate manifests, source declarations, docs, tests, examples, routes and visible effect signals.
 
-- index URL and document digest;
-- exact package name/version and optional package integrity;
-- exact capability ID/version, module path and optional module integrity.
+Mined operations remain evidence-backed candidates and authority-incomplete unless a stronger contract is available.
 
-Lockfiles are deployment/reproducibility records and do not themselves authorize execution.
-
-## Trust assessment
-
-Trust policy operates on observed provenance. The reference assessment can require package identity, module/package integrity, repository, commit, attestation metadata, verified registry signatures, verified provenance, allowlists and a minimum deterministic score.
-
-A numeric score MUST NOT be treated as cryptographic proof.
-
-## Evaluations
-
-A runtime MAY execute evaluation cases through the normal capability path. The reference eval harness preserves schema validation, authorization, verification and receipts. Determinism evaluation compares output hashes across repeated executions.
+Forge may convert a selected candidate into a private executable Capability when a real binder can tie the operation to an exact executable artifact. Unsupported repository surfaces remain non-executable rather than being promoted through guesswork.
 
 ## Composition
 
-Composed capabilities MUST declare the union of effects required by their steps. Runtime pipelines MAY preserve per-step planning, authorization and receipts.
+Composed capabilities declare the union of required effects across steps.
+
+A composer SHOULD reject known schema contradictions rather than fabricate conversion steps. Runtime pipelines SHOULD preserve per-step authorization, provenance and receipts.
+
+Composition creates a new usable ability from compatible operations; it does not erase the trust/authority properties of the underlying steps.
+
+## Capability gaps
+
+When discovery and composition cannot defensibly satisfy an outcome, a host MAY emit a machine-readable Capability gap describing the unresolved intent, desired contracts, authority ceiling, verification requirements and search evidence.
+
+A gap is a specification for missing software, not a claim that the software exists.
 
 ## OpenAPI interoperability
 
-OpenAPI 3.1 operations MAY be imported as capabilities. The reference adapter synthesizes structured inputs from parameters/request bodies, reads JSON response schemas where available and declares `network.connect`. Runtime policy remains authoritative.
+OpenAPI operations MAY become Capability contracts. Network access remains an explicit effect and host authorization remains authoritative.
 
 ## MCP interoperability
 
-Capabilities MAY be projected as MCP tools. Schemas become tool schemas; behavior/effects become annotations; capability identity/version remain metadata. MCP annotations are hints and do not replace runtime authorization.
+Capabilities MAY be projected as MCP tools, and existing MCP servers MAY be imported conservatively as Capability contracts.
+
+MCP annotations are hints; they do not replace Capability authorization or substrate-specific trust decisions.
+
+The Capability MCP bootstrap exposes discovery itself rather than requiring an agent to preload every possible ability.
+
+## Conformance
+
+Structural 1.x conformance is executable.
+
+`runProtocolConformance()` checks the stable reference contracts without network access. `runBinderConformance()` exercises third-party substrate binders through the public registry boundary.
+
+Passing structural conformance does not prove an artifact benign, an inference semantically correct, or an isolation mechanism sufficient for a particular threat model.
 
 ## Compatibility
 
-The 0.x specification is experimental. The reference implementation retains the 0.0.x flat `defineCapability()` shape and string package exports as compatibility paths, but safe ecosystem acquisition requires the newer inert descriptor convention.
+Capability 1.x follows the stability rules in `STABILITY.md`.
+
+Additive extension is expected. Removal, incompatible renaming, weakening of the stable authority/artifact invariants, or incompatible change to locked public contracts requires a new major version.

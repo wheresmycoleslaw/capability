@@ -33,7 +33,64 @@ jobs:
       - run: npm install --ignore-scripts
       - run: npm run build
       - run: npm run registry:check
+      - run: npm run conformance
       - run: npm pack --dry-run
+
+  compatibility-contract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: npm install --ignore-scripts
+      - run: npm run build
+      - name: Prove clean-room binder extension against public 1.x boundary
+        run: |
+          node --input-type=module <<'NODE'
+          import {
+            METABOLIC_BINDING_VERSION,
+            MetabolicBinderRegistry,
+            runBinderConformance,
+            runProtocolConformance
+          } from './dist/index.js';
+
+          const protocol = await runProtocolConformance();
+          if (!protocol.ok) throw new Error(JSON.stringify(protocol));
+
+          const binder = {
+            id: 'clean-room/digest-command',
+            substrate: 'clean-room',
+            discovery: 'explicit',
+            description: 'CI-owned third-party-style binder with no Capability core special case.',
+            async bind({ locator }) {
+              return {
+                bindingVersion: METABOLIC_BINDING_VERSION,
+                binderId: this.id,
+                substrate: this.substrate,
+                locator,
+                immutableArtifact: 'sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+                createdAt: new Date().toISOString(),
+                authority: { complete: false, effects: ['custom:external.opaque-effects'] },
+                evidence: ['sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb']
+              };
+            },
+            async execute(_binding, input) {
+              return { status: 'succeeded', output: input, isolation: 'clean-room-ci' };
+            }
+          };
+
+          const report = await runBinderConformance(binder, { locator: 'clean-room:latest' }, { executeInput: { ok: true }, approved: true });
+          if (!report.ok) throw new Error(JSON.stringify(report));
+
+          const registry = new MetabolicBinderRegistry().register(binder);
+          const binding = await registry.bind(binder.id, { locator: 'clean-room:latest' });
+          let refused = false;
+          try { await registry.execute(binder.id, binding, {}); } catch { refused = true; }
+          if (!refused) throw new Error('incomplete authority bypassed approval');
+          const execution = await registry.execute(binder.id, binding, { ok: true }, { approved: true });
+          if (execution.receipt.immutableArtifact !== binding.immutableArtifact) throw new Error('receipt lost artifact identity');
+          NODE
 
   registry-validation:
     runs-on: ubuntu-latest
