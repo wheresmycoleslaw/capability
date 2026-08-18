@@ -1,4 +1,7 @@
-import type { JsonValue } from "./types.js";
+import { inspectCapability } from "./define.js";
+import { CapabilityRuntime } from "./runtime.js";
+import { permissivePolicy } from "./policy.js";
+import type { Capability, JsonValue } from "./types.js";
 import { createCapabilityGap, metabolizeIntent, type MetabolicSubstrate } from "./metabolism.js";
 
 export type AbilitySourceKind = "native" | "connector" | "mcp" | "openapi" | "npm" | "pypi" | "oci" | "repository" | "composition" | "gap";
@@ -6,6 +9,7 @@ export type AbilitySourceKind = "native" | "connector" | "mcp" | "openapi" | "np
 export type AbilityCandidate = {
   kind: AbilitySourceKind;
   id: string;
+  name?: string;
   description?: string;
   ready: boolean;
   trusted?: boolean;
@@ -26,6 +30,7 @@ export interface AbilityProvider {
   readonly description: string;
   discover(context: AbilityProviderContext): Promise<readonly AbilityCandidate[]>;
   execute?(candidate: AbilityCandidate, context: AbilityProviderContext): Promise<unknown>;
+  close?(): void | Promise<void>;
 }
 
 export type NeedResolution = {
@@ -54,9 +59,13 @@ export class AbilityProviderRegistry {
   list(): readonly AbilityProvider[] {
     return [...this.providers.values()].sort((a, b) => a.priority - b.priority || a.id.localeCompare(b.id));
   }
+
+  async close(): Promise<void> {
+    await Promise.allSettled(this.list().map((provider) => provider.close?.()));
+  }
 }
 
-export type NeedOptions = AbilityProviderContext & {
+export type NeedOptions = Omit<AbilityProviderContext, "intent"> & {
   providers?: AbilityProviderRegistry;
   execute?: boolean;
   indexes?: readonly string[];
@@ -68,16 +77,78 @@ export type NeedOptions = AbilityProviderContext & {
   allowUnverifiedSource?: boolean;
 };
 
+function tokens(value: string): string[] {
+  return value.toLowerCase().split(/[^a-z0-9]+/).filter((part) => part.length > 1);
+}
+
+function lexicalScore(intent: string, capability: Capability): number {
+  const manifest = inspectCapability(capability);
+  const intentTokens = new Set(tokens(intent));
+  if (!intentTokens.size) return 0;
+  const fields = [manifest.id, manifest.name, manifest.description, ...(manifest.tags ?? [])].join(" ").toLowerCase();
+  let hits = 0;
+  for (const token of intentTokens) if (fields.includes(token)) hits += 1;
+  return hits / intentTokens.size;
+}
+
+/**
+ * Turn an already-prepared set of capabilities into a preferred provider.
+ *
+ * This is the bridge used by MCP, OpenAPI, managed connectors, native packages,
+ * and application-specific catalogs. It deliberately reuses CapabilityRuntime so
+ * prepared integrations receive the same authorization and receipt semantics as
+ * acquired software.
+ */
+export function providerFromCapabilities(options: {
+  id: string;
+  kind: Exclude<AbilitySourceKind, "gap">;
+  priority?: number;
+  description: string;
+  capabilities: readonly Capability[];
+  trusted?: boolean;
+}): AbilityProvider {
+  const byId = new Map(options.capabilities.map((capability) => [capability.manifest.id, capability]));
+  return {
+    id: options.id,
+    kind: options.kind,
+    priority: options.priority ?? 20,
+    description: options.description,
+    async discover({ intent }) {
+      return [...byId.values()]
+        .map((capability) => {
+          const manifest = inspectCapability(capability);
+          return {
+            kind: options.kind,
+            id: manifest.id,
+            name: manifest.name,
+            description: manifest.description,
+            ready: true,
+            trusted: options.trusted ?? false,
+            score: lexicalScore(intent, capability),
+            metadata: { version: manifest.version }
+          } satisfies AbilityCandidate;
+        })
+        .filter((candidate) => (candidate.score ?? 0) > 0)
+        .sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
+    },
+    async execute(candidate, context) {
+      const capability = byId.get(candidate.id);
+      if (!capability) throw new Error(`Capability ${candidate.id} is no longer available from provider ${options.id}`);
+      const runtime = new CapabilityRuntime({ policy: permissivePolicy }).register(capability);
+      const receipt = await runtime.invoke(candidate.id, context.input ?? {}, { approved: context.approved ?? false });
+      return { output: receipt.output, receipt };
+    }
+  };
+}
+
 /**
  * Resolve an intent through the simplest production-ready provider first.
  *
- * Providers are intentionally substrate-agnostic at the call site: a caller asks
- * for an ability, while providers decide whether an existing connector, MCP tool,
- * OpenAPI operation, native Capability, or another prepared integration can satisfy
- * it. Capability's software-metabolism engine is the final fallback rather than the
- * front door.
+ * Prepared providers are always consulted before Capability attempts package,
+ * container, or repository acquisition. The caller asks for an ability; substrate
+ * selection is an implementation detail unless diagnostics are requested.
  */
-export async function need(intent: string, options: NeedOptions = { intent: "" }): Promise<NeedResolution> {
+export async function need(intent: string, options: NeedOptions = {}): Promise<NeedResolution> {
   if (!intent.trim()) throw new TypeError("intent is required");
   const context: AbilityProviderContext = {
     intent,
@@ -101,13 +172,23 @@ export async function need(intent: string, options: NeedOptions = { intent: "" }
     if (!ready) continue;
     if (options.execute && provider.execute) {
       const result = await provider.execute(ready, context);
-      return { intent, status: "executed", provider: provider.id, source: provider.kind, candidate: ready, result, considered };
+      const record = result && typeof result === "object" && !Array.isArray(result) ? result as Record<string, unknown> : undefined;
+      return {
+        intent,
+        status: "executed",
+        provider: provider.id,
+        source: provider.kind,
+        candidate: ready,
+        result: record?.output ?? result,
+        ...(record?.receipt !== undefined ? { receipt: record.receipt } : {}),
+        considered
+      };
     }
     return { intent, status: "ready", provider: provider.id, source: provider.kind, candidate: ready, considered };
   }
 
   const fallback = await metabolizeIntent(intent, {
-    ...(options.input !== undefined ? { input: options.input } : {}),
+    ...(options.execute && options.input !== undefined ? { input: options.input } : {}),
     ...(options.approved !== undefined ? { approved: options.approved } : {}),
     ...(options.indexes ? { indexes: options.indexes } : {}),
     ...(options.pythonPackage ? { pythonPackage: options.pythonPackage } : {}),
@@ -140,7 +221,7 @@ export async function need(intent: string, options: NeedOptions = { intent: "" }
   };
 }
 
-/** Convenience provider for prepared integrations discovered outside Capability core. */
+/** Convenience helper for prepared integrations discovered outside Capability core. */
 export function defineAbilityProvider(provider: AbilityProvider): AbilityProvider {
   return provider;
 }
