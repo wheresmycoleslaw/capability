@@ -32,9 +32,7 @@ export * from "./bridge.js";
 export * from "./mcp-import.js";
 export * from "./repository-mine.js";
 export * from "./forge.js";
-
 export * from "./metabolism.js";
-
 export * from "./pypi.js";
 export * from "./binders.js";
 export * from "./default-binders.js";
@@ -42,3 +40,5 @@ export * from "./metabolic-compose.js";
 export * from "./gap-scaffold.js";
 export * from "./protocol.js";
 export * from "./conformance.js";
+export * from "./need.js";
+export * from "./providers.js";

@@ -1,11 +1,22 @@
 #!/usr/bin/env node
 import { createInterface } from "node:readline";
 import { CapabilityNetworkMcpBridge } from "./network-mcp.js";
+import { loadProviderConfig } from "./providers.js";
 
 const MODERN_VERSION = "2026-07-28";
 const LEGACY_VERSIONS = ["2025-11-25", "2025-06-18", "2025-03-26", "2024-11-05"] as const;
 const SERVER_INFO = { name: "capability-network", version: "1.0.0" };
-const bridge = new CapabilityNetworkMcpBridge({ indexes: process.env.CAPABILITY_INDEX ? [process.env.CAPABILITY_INDEX] : undefined });
+const loadedProviders = process.env.CAPABILITY_PROVIDERS
+  ? await loadProviderConfig(process.env.CAPABILITY_PROVIDERS)
+  : undefined;
+const bridge = new CapabilityNetworkMcpBridge({
+  indexes: process.env.CAPABILITY_INDEX ? [process.env.CAPABILITY_INDEX] : undefined,
+  providers: loadedProviders?.registry
+});
+
+process.once("exit", () => { void loadedProviders?.close(); });
+process.once("SIGINT", () => { void loadedProviders?.close().finally(() => process.exit(130)); });
+process.once("SIGTERM", () => { void loadedProviders?.close().finally(() => process.exit(143)); });
 
 type JsonRpcId = string | number | null;
 type JsonRpcRequest = { jsonrpc?: string; id?: JsonRpcId; method?: string; params?: Record<string, unknown> };
@@ -31,7 +42,7 @@ async function handle(request: JsonRpcRequest) {
     return result(id, {
       supportedVersions: [MODERN_VERSION],
       capabilities: { tools: {} },
-      instructions: "Capability 1.x exposes stable discovery and metabolism contracts. Use capability_search for native abilities, capability_search_world to discover existing software, capability_mine_repository to inspect source without executing it, capability_forge_repository to bind a selected operation to an exact artifact, or capability_solve to go from an outcome to a native/forged ability. Review authority before any execution.",
+      instructions: "Use capability_need as the default entry point: describe the outcome and let Capability prefer prepared providers before falling back to the wider software world. Use search, mining, forge, metabolism and composition tools only when you need explicit diagnostics or substrate control.",
       _meta: modernMeta()
     });
   }
@@ -43,7 +54,7 @@ async function handle(request: JsonRpcRequest) {
       protocolVersion: negotiated,
       capabilities: { tools: { listChanged: false } },
       serverInfo: SERVER_INFO,
-      instructions: "Capability is a self-expanding MCP bootstrap: search native or external software, mine arbitrary GitHub repositories, forge selected functions/CLIs into exact artifact-bound private capabilities, and execute first-run inferred software only through explicit approval and Docker isolation."
+      instructions: "Capability is an ability layer for agents. Start with capability_need. It prefers prepared connectors, MCP/OpenAPI and native abilities, then falls back to software acquisition when the prepared ecosystem cannot satisfy the request."
     });
   }
 

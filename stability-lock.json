@@ -33,6 +33,7 @@
     "./conformance"
   ],
   "mcpTools": [
+    "capability_need",
     "capability_search",
     "capability_search_world",
     "capability_mine_repository",

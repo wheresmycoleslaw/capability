@@ -9,6 +9,7 @@ import {
   validateCapabilitySiteDocument
 } from "../dist/web-discovery.js";
 import { CapabilityNetworkMcpBridge, capabilityNetworkMcpTools } from "../dist/network-mcp.js";
+import { AbilityProviderRegistry, defineAbilityProvider } from "../dist/need.js";
 
 const index = {
   indexVersion: "0.1",
@@ -48,9 +49,10 @@ test("site discovery document is deterministic and well-known", async () => {
   assert.equal(probe.indexes.length, 1);
 });
 
-test("MCP bootstrap bridge exposes discovery, mining, forging and solving primitives", () => {
+test("MCP bootstrap bridge leads with the ability-first primitive", () => {
   const names = capabilityNetworkMcpTools().map((tool) => tool.name);
   assert.deepEqual(names, [
+    "capability_need",
     "capability_search",
     "capability_search_world",
     "capability_mine_repository",
@@ -66,6 +68,28 @@ test("MCP bootstrap bridge exposes discovery, mining, forging and solving primit
   ]);
   const bridge = new CapabilityNetworkMcpBridge();
   assert.deepEqual(bridge.listTools().tools.map((tool) => tool.name), names);
+});
+
+test("capability_need prefers prepared providers", async () => {
+  const providers = new AbilityProviderRegistry().register(defineAbilityProvider({
+    id: "test/prepared",
+    kind: "connector",
+    priority: 10,
+    description: "Prepared integrations",
+    async discover({ intent }) {
+      return intent.includes("email")
+        ? [{ kind: "connector", id: "mail/send", ready: true, trusted: true, score: 1, effects: ["email.send"], authorityComplete: true }]
+        : [];
+    },
+    async execute() {
+      return { output: { sent: true }, receipt: { provider: "test/prepared" } };
+    }
+  }));
+  const bridge = new CapabilityNetworkMcpBridge({ providers });
+  const response = await bridge.callTool("capability_need", { query: "send an email", input: { to: "person@example.com" }, execute: true, approved: true });
+  assert.equal(response.structuredContent.provider, "test/prepared");
+  assert.equal(response.structuredContent.source, "connector");
+  assert.deepEqual(response.structuredContent.result, { sent: true });
 });
 
 test("stdio MCP bridge serves modern discovery and legacy initialize", async (t) => {
@@ -91,6 +115,7 @@ test("stdio MCP bridge serves modern discovery and legacy initialize", async (t)
   assert.equal(replies.length, 3);
   assert.deepEqual(replies[0].result.supportedVersions, ["2026-07-28"]);
   assert.equal(replies[1].result.protocolVersion, "2025-11-25");
+  assert.equal(replies[2].result.tools[0].name, "capability_need");
   assert.equal(replies[2].result.tools.some((tool) => tool.name === "capability_search_world"), true);
   assert.equal(replies[2].result.tools.some((tool) => tool.name === "capability_mine_repository"), true);
   assert.equal(replies[2].result.tools.some((tool) => tool.name === "capability_forge_repository"), true);

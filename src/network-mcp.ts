@@ -5,6 +5,7 @@ import { mineGitHubRepository } from "./repository-mine.js";
 import { activateForgedAbility, forgeGitHubAbility, solveSoftwareIntent } from "./forge.js";
 import { metabolizeIntent, metabolicCoverage } from "./metabolism.js";
 import { composeIntent } from "./metabolic-compose.js";
+import { need, type AbilityProviderRegistry } from "./need.js";
 
 export type NetworkMcpTool = {
   name: string;
@@ -16,16 +17,37 @@ export type NetworkMcpTool = {
 
 const tools: readonly NetworkMcpTool[] = [
   {
+    name: "capability_need",
+    title: "Get an Ability",
+    description: "Primary Capability entry point. Describe the outcome you need. Capability prefers prepared providers such as approved connectors, MCP tools, OpenAPI operations and native abilities, then falls back to existing software only when necessary. Set execute=true to run the selected ability; resolution alone never executes it.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        query: { type: "string", description: "Outcome or ability needed" },
+        input: {},
+        execute: { type: "boolean", default: false },
+        approved: { type: "boolean", default: false },
+        pythonPackage: { type: "string" },
+        pythonVersion: { type: "string" },
+        ociImage: { type: "string" },
+        ociArgs: { type: "array", items: { type: "string" } },
+        externalOnly: { type: "boolean", default: false }
+      },
+      required: ["query"]
+    },
+    annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: true }
+  },
+  {
     name: "capability_search",
     title: "Search Capability Network",
-    description: "Discover executable abilities from the federated Capability network before installing code. Use this when you need an ability that is not already available as a tool.",
+    description: "Discover executable abilities from the federated Capability network before installing code.",
     inputSchema: { type: "object", properties: { query: { type: "string" }, limit: { type: "integer", minimum: 1, maximum: 25 } }, required: ["query"] },
     annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true }
   },
   {
     name: "capability_search_world",
     title: "Search the Software World",
-    description: "Search native Capability indexes plus external npm and GitHub catalogs. External results are candidates, not trusted executable capabilities, until a native contract, OpenAPI/MCP import, or sidecar bridge binds a specific operation and authority surface.",
+    description: "Advanced discovery across native Capability indexes plus external npm and GitHub catalogs. External results are candidates, not trusted executable capabilities, until a contract or binder supplies a defensible execution boundary.",
     inputSchema: {
       type: "object",
       properties: {
@@ -41,7 +63,7 @@ const tools: readonly NetworkMcpTool[] = [
   {
     name: "capability_mine_repository",
     title: "Mine GitHub Repository Abilities",
-    description: "Inspect an arbitrary GitHub repository at an exact commit and infer useful public abilities from manifests, docs, tests, examples, source declarations, routes, and authority signals without executing repository code. Inferences remain non-executable candidates.",
+    description: "Advanced: inspect an arbitrary GitHub repository at an exact commit and infer useful public abilities without executing repository code. Inferences remain non-executable candidates.",
     inputSchema: {
       type: "object",
       properties: {
@@ -58,7 +80,7 @@ const tools: readonly NetworkMcpTool[] = [
   {
     name: "capability_forge_repository",
     title: "Forge Repository Ability",
-    description: "Turn a mined GitHub function or CLI into a private Capability sidecar pinned to an exact npm artifact and, when npm gitHead is available, the exact source commit. First execution requires explicit approval and Docker isolation.",
+    description: "Advanced: turn a mined GitHub function or CLI into a private Capability sidecar pinned to an exact npm artifact and source revision when available. First execution requires explicit approval and Docker isolation.",
     inputSchema: {
       type: "object",
       properties: {
@@ -77,7 +99,7 @@ const tools: readonly NetworkMcpTool[] = [
   {
     name: "capability_solve",
     title: "Solve With the Software World",
-    description: "Given an outcome, search native abilities and existing software. If no native ability is selected, mine promising GitHub repositories and forge the first defensible npm-backed operation. With input and approval, execute the resulting ability in Docker and return a receipt.",
+    description: "Advanced: search native abilities and existing software, then forge a defensible npm-backed operation when necessary.",
     inputSchema: {
       type: "object",
       properties: {
@@ -94,21 +116,21 @@ const tools: readonly NetworkMcpTool[] = [
   {
     name: "capability_metabolize",
     title: "Metabolize Existing Software",
-    description: "Start from an outcome and acquire a defensible ability through native Capability, npm/GitHub Forge, an explicitly selected PyPI package, or an OCI image. External bindings remain authority-incomplete and require approval for first execution.",
+    description: "Advanced substrate control for acquiring an ability through native Capability, npm/GitHub Forge, an explicitly selected PyPI package, or an OCI image.",
     inputSchema: { type: "object", properties: { query: { type: "string" }, input: {}, approved: { type: "boolean", default: false }, pythonPackage: { type: "string" }, pythonVersion: { type: "string" }, ociImage: { type: "string" }, ociArgs: { type: "array", items: { type: "string" } }, externalOnly: { type: "boolean", default: false } }, required: ["query"] },
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true }
   },
   {
     name: "capability_compose",
     title: "Compose Capability Pipeline",
-    description: "Split an explicit multi-step intent, discover candidate Capability contracts for each step, require schema-compatible boundaries, synthesize a composite manifest and optionally execute the pipeline with a receipt for every step.",
+    description: "Advanced: discover compatible contracts, synthesize a composite manifest and optionally execute the pipeline with per-step receipts.",
     inputSchema: { type: "object", properties: { intent: { type: "string" }, input: {}, approved: { type: "boolean", default: false } }, required: ["intent"] },
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true }
   },
   {
     name: "capability_coverage",
-    title: "Capability Metabolic Coverage",
-    description: "Report which software substrate families Capability can currently discover, mine, bind and execute, without inventing a percentage of all software.",
+    title: "Capability Software Coverage",
+    description: "Report which software families Capability can currently discover, mine, bind and execute.",
     inputSchema: { type: "object", properties: {} },
     annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false }
   },
@@ -122,7 +144,7 @@ const tools: readonly NetworkMcpTool[] = [
   {
     name: "capability_execute",
     title: "Acquire and Execute Capability",
-    description: "Resolve, verify, acquire, authorize, and execute an ability through Capability's isolation boundary. Mutating or open-world effects remain subject to policy and explicit approval.",
+    description: "Resolve, verify, acquire, authorize, and execute a known Capability-network ability through Capability's isolation boundary.",
     inputSchema: { type: "object", properties: { id: { type: "string" }, input: {}, approved: { type: "boolean", default: false } }, required: ["id", "input"] },
     annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: true }
   },
@@ -148,14 +170,33 @@ function textResult(value: unknown, isError = false) {
 
 export class CapabilityNetworkMcpBridge {
   private readonly indexes: readonly string[];
-  constructor(options: { indexes?: readonly string[] } = {}) {
+  private readonly providers?: AbilityProviderRegistry;
+
+  constructor(options: { indexes?: readonly string[]; providers?: AbilityProviderRegistry } = {}) {
     this.indexes = options.indexes?.length ? [...options.indexes] : [DEFAULT_CAPABILITY_INDEX_URL];
+    this.providers = options.providers;
   }
 
   listTools() { return { tools: [...tools] }; }
 
   async callTool(name: string, args: Record<string, unknown> = {}) {
     try {
+      if (name === "capability_need") {
+        const query = typeof args.query === "string" ? args.query : "";
+        if (!query) throw new TypeError("query is required");
+        return textResult(await need(query, {
+          providers: this.providers,
+          indexes: this.indexes,
+          ...(args.input !== undefined ? { input: args.input } : {}),
+          execute: args.execute === true,
+          approved: args.approved === true,
+          pythonPackage: typeof args.pythonPackage === "string" ? args.pythonPackage : undefined,
+          pythonVersion: typeof args.pythonVersion === "string" ? args.pythonVersion : undefined,
+          ociImage: typeof args.ociImage === "string" ? args.ociImage : undefined,
+          ociArgs: Array.isArray(args.ociArgs) ? args.ociArgs.filter((value): value is string => typeof value === "string") : undefined,
+          externalOnly: args.externalOnly === true
+        }));
+      }
       if (name === "capability_search") {
         const query = typeof args.query === "string" ? args.query : "";
         if (!query) throw new TypeError("query is required");
