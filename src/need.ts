@@ -135,7 +135,8 @@ export function providerFromCapabilities(options: {
       const capability = byId.get(candidate.id);
       if (!capability) throw new Error(`Capability ${candidate.id} is no longer available from provider ${options.id}`);
       const runtime = new CapabilityRuntime({ policy: permissivePolicy }).register(capability);
-      const receipt = await runtime.invoke(candidate.id, context.input ?? {}, { approved: context.approved ?? false });
+      const input = context.input === undefined ? {} : context.input;
+      const receipt = await runtime.invoke(candidate.id, input, { approved: context.approved ?? false });
       return { output: receipt.output, receipt };
     }
   };
