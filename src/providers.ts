@@ -1,6 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
-import type { Capability, JsonValue } from "./types.js";
+import type { Capability } from "./types.js";
 import { capabilitiesFromOpenApi, type OpenApiDocument } from "./openapi.js";
 import { connectStdioMcpCapabilities } from "./mcp-import.js";
 import { AbilityProviderRegistry, providerFromCapabilities, type AbilityProvider, type AbilitySourceKind } from "./need.js";
@@ -48,6 +48,19 @@ async function readJsonSource(source: string): Promise<unknown> {
   return response.json();
 }
 
+export function expandProviderEnvironment(value: unknown, env: NodeJS.ProcessEnv = process.env): unknown {
+  if (typeof value === "string") {
+    return value.replace(/\$\{([A-Za-z_][A-Za-z0-9_]*)\}/g, (_, name: string) => env[name] ?? "");
+  }
+  if (Array.isArray(value)) return value.map((entry) => expandProviderEnvironment(entry, env));
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>).map(([key, entry]) => [key, expandProviderEnvironment(entry, env)])
+    );
+  }
+  return value;
+}
+
 export function abilityProviderFromCapabilities(options: {
   id: string;
   kind: Exclude<AbilitySourceKind, "gap">;
@@ -62,7 +75,8 @@ export function abilityProviderFromCapabilities(options: {
 }
 
 export async function loadProviderConfig(path = "capability.providers.json"): Promise<LoadedProviderRegistry> {
-  const config = JSON.parse(await readFile(resolve(path), "utf8")) as ProviderConfig;
+  const parsed = JSON.parse(await readFile(resolve(path), "utf8"));
+  const config = expandProviderEnvironment(parsed) as ProviderConfig;
   const registry = new AbilityProviderRegistry();
   const sources: LoadedProviderRegistry["sources"] = [];
 
@@ -131,15 +145,4 @@ export function providerConfigTemplate(): ProviderConfig {
       }
     ]
   };
-}
-
-export function expandProviderEnvironment(value: unknown, env: NodeJS.ProcessEnv = process.env): unknown {
-  if (typeof value === "string") {
-    return value.replace(/\$\{([A-Za-z_][A-Za-z0-9_]*)\}/g, (_, name: string) => env[name] ?? "");
-  }
-  if (Array.isArray(value)) return value.map((entry) => expandProviderEnvironment(entry, env));
-  if (value && typeof value === "object") {
-    return Object.fromEntries(Object.entries(value as Record<string, unknown>).map(([key, entry]) => [key, expandProviderEnvironment(entry, env)])) as Record<string, JsonValue>;
-  }
-  return value;
 }
