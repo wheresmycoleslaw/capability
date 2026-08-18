@@ -19,7 +19,7 @@ const tools: readonly NetworkMcpTool[] = [
   {
     name: "capability_need",
     title: "Get an Ability",
-    description: "Primary Capability entry point. Describe the outcome you need. Capability prefers prepared providers such as approved connectors, MCP tools, OpenAPI operations and native abilities, then falls back to existing software only when necessary. With input, it can execute through the selected provider and return the resulting receipt.",
+    description: "Primary Capability entry point. Describe the outcome you need. Capability prefers prepared providers such as approved connectors, MCP tools, OpenAPI operations and native abilities, then falls back to existing software only when necessary. Set execute=true to run the selected ability; resolution alone never executes it.",
     inputSchema: {
       type: "object",
       properties: {
@@ -35,7 +35,7 @@ const tools: readonly NetworkMcpTool[] = [
       },
       required: ["query"]
     },
-    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true }
+    annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: true }
   },
   {
     name: "capability_search",
@@ -188,7 +188,7 @@ export class CapabilityNetworkMcpBridge {
           providers: this.providers,
           indexes: this.indexes,
           ...(args.input !== undefined ? { input: args.input } : {}),
-          execute: args.execute === true || args.input !== undefined,
+          execute: args.execute === true,
           approved: args.approved === true,
           pythonPackage: typeof args.pythonPackage === "string" ? args.pythonPackage : undefined,
           pythonVersion: typeof args.pythonVersion === "string" ? args.pythonVersion : undefined,
