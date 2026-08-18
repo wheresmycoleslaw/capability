@@ -48,7 +48,13 @@ test("need centrally approval-gates prepared providers before execution", async 
   const resolution = await need("send an email", { providers, execute: true, approved: true, input: { to: "person@example.com" } });
   assert.equal(resolution.status, "executed");
   assert.deepEqual(resolution.result, { candidate: "gmail/send", input: { to: "person@example.com" } });
-  assert.deepEqual(resolution.receipt, { provider: "test" });
+  assert.equal(resolution.receipt?.receiptVersion, "0.1");
+  assert.deepEqual(resolution.receipt?.provider, { id: "test/connectors", kind: "connector" });
+  assert.deepEqual(resolution.receipt?.effects, ["email.send"]);
+  assert.equal(resolution.receipt?.approved, true);
+  assert.deepEqual(resolution.receipt?.upstreamReceipt, { provider: "test" });
+  assert.equal(typeof resolution.receipt?.inputHash, "string");
+  assert.equal(typeof resolution.receipt?.outputHash, "string");
 });
 
 test("provider priority is explicit and deterministic", () => {
@@ -90,6 +96,7 @@ test("providerFromCapabilities gives prepared tools normal runtime receipts", as
   assert.equal(resolution.status, "executed");
   assert.deepEqual(resolution.result, { sent: true });
   assert.equal(resolution.receipt?.status, "succeeded");
+  assert.equal(resolution.receipt?.upstreamReceipt?.status, "succeeded");
 });
 
 test("unknown prepared-provider authority requires approval by default", async () => {
