@@ -11,7 +11,7 @@ test("need prefers a prepared provider before software-world fallback", async ()
     description: "Prepared production integrations",
     async discover({ intent }) {
       return intent.includes("email")
-        ? [{ kind: "connector", id: "gmail/send", description: "Send email", ready: true, trusted: true, score: 1 }]
+        ? [{ kind: "connector", id: "gmail/send", description: "Send email", ready: true, trusted: true, score: 1, effects: ["email.send"], authorityComplete: true }]
         : [];
     },
     async execute(candidate, { input }) {
@@ -27,21 +27,25 @@ test("need prefers a prepared provider before software-world fallback", async ()
   assert.deepEqual(resolution.considered, [{ provider: "test/connectors", kind: "connector", candidates: 1 }]);
 });
 
-test("need executes a prepared provider through the same front door", async () => {
+test("need centrally approval-gates prepared providers before execution", async () => {
   const provider = defineAbilityProvider({
     id: "test/connectors",
     kind: "connector",
     priority: 10,
     description: "Prepared production integrations",
     async discover() {
-      return [{ kind: "connector", id: "gmail/send", ready: true, trusted: true, score: 1 }];
+      return [{ kind: "connector", id: "gmail/send", ready: true, trusted: true, score: 1, effects: ["email.send"], authorityComplete: true }];
     },
     async execute(candidate, { input }) {
       return { output: { candidate: candidate.id, input }, receipt: { provider: "test" } };
     }
   });
   const providers = new AbilityProviderRegistry().register(provider);
-  const resolution = await need("send an email", { providers, execute: true, input: { to: "person@example.com" } });
+  await assert.rejects(
+    () => need("send an email", { providers, execute: true, input: { to: "person@example.com" } }),
+    (error) => error?.code === "APPROVAL_REQUIRED"
+  );
+  const resolution = await need("send an email", { providers, execute: true, approved: true, input: { to: "person@example.com" } });
   assert.equal(resolution.status, "executed");
   assert.deepEqual(resolution.result, { candidate: "gmail/send", input: { to: "person@example.com" } });
   assert.deepEqual(resolution.receipt, { provider: "test" });
@@ -86,4 +90,21 @@ test("providerFromCapabilities gives prepared tools normal runtime receipts", as
   assert.equal(resolution.status, "executed");
   assert.deepEqual(resolution.result, { sent: true });
   assert.equal(resolution.receipt?.status, "succeeded");
+});
+
+test("unknown prepared-provider authority requires approval by default", async () => {
+  const providers = new AbilityProviderRegistry().register(defineAbilityProvider({
+    id: "test/opaque",
+    kind: "connector",
+    priority: 10,
+    description: "Opaque provider",
+    async discover() {
+      return [{ kind: "connector", id: "opaque/action", ready: true, score: 1 }];
+    },
+    async execute() { return { output: true }; }
+  }));
+  await assert.rejects(
+    () => need("opaque action", { providers, execute: true }),
+    (error) => error?.code === "APPROVAL_REQUIRED"
+  );
 });
