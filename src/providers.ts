@@ -50,7 +50,11 @@ async function readJsonSource(source: string): Promise<unknown> {
 
 export function expandProviderEnvironment(value: unknown, env: NodeJS.ProcessEnv = process.env): unknown {
   if (typeof value === "string") {
-    return value.replace(/\$\{([A-Za-z_][A-Za-z0-9_]*)\}/g, (_, name: string) => env[name] ?? "");
+    return value.replace(/\$\{([A-Za-z_][A-Za-z0-9_]*)\}/g, (_, name: string) => {
+      const resolved = env[name];
+      if (resolved === undefined) throw new Error(`Missing provider environment variable: ${name}`);
+      return resolved;
+    });
   }
   if (Array.isArray(value)) return value.map((entry) => expandProviderEnvironment(entry, env));
   if (value && typeof value === "object") {
@@ -59,6 +63,22 @@ export function expandProviderEnvironment(value: unknown, env: NodeJS.ProcessEnv
     );
   }
   return value;
+}
+
+function assertProviderConfig(value: unknown): asserts value is ProviderConfig {
+  if (!value || typeof value !== "object" || Array.isArray(value)) throw new TypeError("Provider config must be an object");
+  const providers = (value as Record<string, unknown>).providers;
+  if (providers === undefined) return;
+  if (!Array.isArray(providers)) throw new TypeError("Provider config providers must be an array");
+  for (const [index, raw] of providers.entries()) {
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) throw new TypeError(`providers[${index}] must be an object`);
+    const entry = raw as Record<string, unknown>;
+    if (entry.type !== "mcp" && entry.type !== "openapi") throw new TypeError(`providers[${index}].type must be mcp or openapi`);
+    if (typeof entry.id !== "string" || !entry.id.trim()) throw new TypeError(`providers[${index}].id is required`);
+    if (entry.priority !== undefined && typeof entry.priority !== "number") throw new TypeError(`providers[${index}].priority must be a number`);
+    if (entry.type === "mcp" && (typeof entry.command !== "string" || !entry.command.trim())) throw new TypeError(`providers[${index}].command is required for MCP`);
+    if (entry.type === "openapi" && (typeof entry.source !== "string" || !entry.source.trim())) throw new TypeError(`providers[${index}].source is required for OpenAPI`);
+  }
 }
 
 export function abilityProviderFromCapabilities(options: {
@@ -76,7 +96,9 @@ export function abilityProviderFromCapabilities(options: {
 
 export async function loadProviderConfig(path = "capability.providers.json"): Promise<LoadedProviderRegistry> {
   const parsed = JSON.parse(await readFile(resolve(path), "utf8"));
-  const config = expandProviderEnvironment(parsed) as ProviderConfig;
+  const expanded = expandProviderEnvironment(parsed);
+  assertProviderConfig(expanded);
+  const config = expanded;
   const registry = new AbilityProviderRegistry();
   const sources: LoadedProviderRegistry["sources"] = [];
 
