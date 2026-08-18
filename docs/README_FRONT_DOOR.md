@@ -1,0 +1,1 @@
+The primary public story belongs in README.md and should lead with `cap need`: ask for an ability; Capability prefers prepared integrations and falls back to software acquisition only when needed. This file exists only as an implementation note for the product-front-door change.
