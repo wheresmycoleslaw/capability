@@ -84,7 +84,7 @@ test("capability_need prefers prepared providers", async () => {
     }
   }));
   const bridge = new CapabilityNetworkMcpBridge({ providers });
-  const response = await bridge.callTool("capability_need", { query: "send an email", input: { to: "person@example.com" } });
+  const response = await bridge.callTool("capability_need", { query: "send an email", input: { to: "person@example.com" }, execute: true });
   assert.equal(response.structuredContent.provider, "test/prepared");
   assert.equal(response.structuredContent.source, "connector");
   assert.deepEqual(response.structuredContent.result, { sent: true });
