@@ -77,14 +77,16 @@ test("capability_need prefers prepared providers", async () => {
     priority: 10,
     description: "Prepared integrations",
     async discover({ intent }) {
-      return intent.includes("email") ? [{ kind: "connector", id: "mail/send", ready: true, trusted: true, score: 1 }] : [];
+      return intent.includes("email")
+        ? [{ kind: "connector", id: "mail/send", ready: true, trusted: true, score: 1, effects: ["email.send"], authorityComplete: true }]
+        : [];
     },
     async execute() {
       return { output: { sent: true }, receipt: { provider: "test/prepared" } };
     }
   }));
   const bridge = new CapabilityNetworkMcpBridge({ providers });
-  const response = await bridge.callTool("capability_need", { query: "send an email", input: { to: "person@example.com" }, execute: true });
+  const response = await bridge.callTool("capability_need", { query: "send an email", input: { to: "person@example.com" }, execute: true, approved: true });
   assert.equal(response.structuredContent.provider, "test/prepared");
   assert.equal(response.structuredContent.source, "connector");
   assert.deepEqual(response.structuredContent.result, { sent: true });
