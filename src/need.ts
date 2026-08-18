@@ -2,6 +2,7 @@ import { inspectCapability } from "./define.js";
 import { CapabilityRuntime } from "./runtime.js";
 import { authorizeEffects, permissivePolicy } from "./policy.js";
 import { CapabilityError } from "./errors.js";
+import { sha256 } from "./utils.js";
 import type { Capability, CapabilityEffect, JsonValue } from "./types.js";
 import { createCapabilityGap, metabolizeIntent, type MetabolicSubstrate } from "./metabolism.js";
 
@@ -35,6 +36,21 @@ export interface AbilityProvider {
   execute?(candidate: AbilityCandidate, context: AbilityProviderContext): Promise<unknown>;
   close?(): void | Promise<void>;
 }
+
+export type PreparedProviderReceipt = {
+  receiptVersion: "0.1";
+  provider: { id: string; kind: AbilitySourceKind };
+  ability: { id: string; name?: string };
+  status: "succeeded";
+  effects: readonly CapabilityEffect[];
+  authorityComplete: boolean;
+  approved: boolean;
+  inputHash: string;
+  outputHash: string;
+  startedAt: string;
+  endedAt: string;
+  upstreamReceipt?: unknown;
+};
 
 export type NeedResolution = {
   intent: string;
@@ -100,10 +116,10 @@ function providerEffects(candidate: AbilityCandidate): CapabilityEffect[] {
   return [...new Set(effects)];
 }
 
-function authorizeProviderCandidate(candidate: AbilityCandidate, approved: boolean): void {
+function authorizeProviderCandidate(candidate: AbilityCandidate, approved: boolean): CapabilityEffect[] {
   const effects = providerEffects(candidate);
   const decision = authorizeEffects(effects, permissivePolicy, approved);
-  if (decision.allowed) return;
+  if (decision.allowed) return effects;
   const code = decision.approvalRequired.length ? "APPROVAL_REQUIRED" : "PERMISSION_DENIED";
   throw new CapabilityError(code, decision.reason ?? `Provider ability ${candidate.id} is not authorized`, {
     candidate: candidate.id,
@@ -195,17 +211,35 @@ export async function need(intent: string, options: NeedOptions = {}): Promise<N
     considered.push({ provider: provider.id, kind: provider.kind, candidates: candidates.length });
     if (!ready) continue;
     if (options.execute && provider.execute) {
-      authorizeProviderCandidate(ready, options.approved ?? false);
+      const approved = options.approved ?? false;
+      const effects = authorizeProviderCandidate(ready, approved);
+      const startedAt = new Date().toISOString();
       const result = await provider.execute(ready, context);
+      const endedAt = new Date().toISOString();
       const record = result && typeof result === "object" && !Array.isArray(result) ? result as Record<string, unknown> : undefined;
+      const output = record?.output ?? result;
+      const receipt: PreparedProviderReceipt = {
+        receiptVersion: "0.1",
+        provider: { id: provider.id, kind: provider.kind },
+        ability: { id: ready.id, ...(ready.name ? { name: ready.name } : {}) },
+        status: "succeeded",
+        effects,
+        authorityComplete: ready.authorityComplete === true,
+        approved,
+        inputHash: sha256(context.input === undefined ? {} : context.input),
+        outputHash: sha256(output),
+        startedAt,
+        endedAt,
+        ...(record?.receipt !== undefined ? { upstreamReceipt: record.receipt } : {})
+      };
       return {
         intent,
         status: "executed",
         provider: provider.id,
         source: provider.kind,
         candidate: ready,
-        result: record?.output ?? result,
-        ...(record?.receipt !== undefined ? { receipt: record.receipt } : {}),
+        result: output,
+        receipt,
         considered
       };
     }
@@ -218,8 +252,8 @@ export async function need(intent: string, options: NeedOptions = {}): Promise<N
     ...(options.indexes ? { indexes: options.indexes } : {}),
     ...(options.pythonPackage ? { pythonPackage: options.pythonPackage } : {}),
     ...(options.pythonVersion ? { pythonVersion: options.pythonVersion } : {}),
-    ...(options.ociImage ? { ociImage: options.ociImage } : {}),
-    ...(options.ociArgs ? { ociArgs: options.ociArgs } : {}),
+    ...(options.execute && options.ociImage ? { ociImage: options.ociImage } : {}),
+    ...(options.execute && options.ociArgs ? { ociArgs: options.ociArgs } : {}),
     ...(options.externalOnly !== undefined ? { externalOnly: options.externalOnly } : {}),
     ...(options.allowUnverifiedSource !== undefined ? { allowUnverifiedSource: options.allowUnverifiedSource } : {})
   });
