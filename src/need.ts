@@ -1,7 +1,8 @@
 import { inspectCapability } from "./define.js";
 import { CapabilityRuntime } from "./runtime.js";
-import { permissivePolicy } from "./policy.js";
-import type { Capability, JsonValue } from "./types.js";
+import { authorizeEffects, permissivePolicy } from "./policy.js";
+import { CapabilityError } from "./errors.js";
+import type { Capability, CapabilityEffect, JsonValue } from "./types.js";
 import { createCapabilityGap, metabolizeIntent, type MetabolicSubstrate } from "./metabolism.js";
 
 export type AbilitySourceKind = "native" | "connector" | "mcp" | "openapi" | "npm" | "pypi" | "oci" | "repository" | "composition" | "gap";
@@ -14,6 +15,8 @@ export type AbilityCandidate = {
   ready: boolean;
   trusted?: boolean;
   score?: number;
+  effects?: readonly CapabilityEffect[];
+  authorityComplete?: boolean;
   metadata?: Record<string, JsonValue>;
 };
 
@@ -91,6 +94,24 @@ function lexicalScore(intent: string, capability: Capability): number {
   return hits / intentTokens.size;
 }
 
+function providerEffects(candidate: AbilityCandidate): CapabilityEffect[] {
+  const effects: CapabilityEffect[] = [...(candidate.effects ?? [])];
+  if (candidate.authorityComplete !== true) effects.push("custom:provider.opaque-effects");
+  return [...new Set(effects)];
+}
+
+function authorizeProviderCandidate(candidate: AbilityCandidate, approved: boolean): void {
+  const effects = providerEffects(candidate);
+  const decision = authorizeEffects(effects, permissivePolicy, approved);
+  if (decision.allowed) return;
+  const code = decision.approvalRequired.length ? "APPROVAL_REQUIRED" : "PERMISSION_DENIED";
+  throw new CapabilityError(code, decision.reason ?? `Provider ability ${candidate.id} is not authorized`, {
+    candidate: candidate.id,
+    effects,
+    decision
+  });
+}
+
 /**
  * Turn an already-prepared set of capabilities into a preferred provider.
  *
@@ -125,6 +146,8 @@ export function providerFromCapabilities(options: {
             ready: true,
             trusted: options.trusted ?? false,
             score: lexicalScore(intent, capability),
+            effects: manifest.effects ?? [],
+            authorityComplete: true,
             metadata: { version: manifest.version }
           } satisfies AbilityCandidate;
         })
@@ -172,6 +195,7 @@ export async function need(intent: string, options: NeedOptions = {}): Promise<N
     considered.push({ provider: provider.id, kind: provider.kind, candidates: candidates.length });
     if (!ready) continue;
     if (options.execute && provider.execute) {
+      authorizeProviderCandidate(ready, options.approved ?? false);
       const result = await provider.execute(ready, context);
       const record = result && typeof result === "object" && !Array.isArray(result) ? result as Record<string, unknown> : undefined;
       return {
