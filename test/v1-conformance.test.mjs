@@ -34,7 +34,7 @@ test("reference protocol conformance passes without network access", async () =>
 });
 
 test("1.x stability lock is a compatibility floor", () => {
-  assert.equal(packageJson.version, "1.0.0");
+  assert.match(packageJson.version, /^1\./, "reference package must remain on the 1.x compatibility line");
   assert.equal(lock.protocolVersion, "1.0");
   assert.equal(lock.stabilityLine, "1.x");
 
