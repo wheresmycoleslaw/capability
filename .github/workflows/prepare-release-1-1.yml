@@ -4,14 +4,16 @@ on:
   push:
     branches:
       - release/1.1.0-ability-first
-    paths:
-      - .github/workflows/prepare-release-1-1.yml
+  pull_request:
+    branches:
+      - main
 
 permissions:
   contents: write
 
 jobs:
   prepare:
+    if: github.head_ref == 'release/1.1.0-ability-first' || github.ref == 'refs/heads/release/1.1.0-ability-first'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -20,23 +22,30 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 24
-      - name: Bump package and release marker
+      - name: Prepare release metadata if needed
         run: |
+          CURRENT=$(node -p "require('./package.json').version")
+          if [ "$CURRENT" = "1.1.0" ]; then
+            echo 'Release metadata already prepared.'
+            exit 0
+          fi
           npm version 1.1.0 --no-git-tag-version
           printf '1.1.0\n' > .release
           python - <<'PY'
           from pathlib import Path
           path = Path('CHANGELOG.md')
           text = path.read_text()
-          heading = '''# Changelog\n\n## 1.1.0\n\n- make `need()` the primary ability-first API: callers describe an outcome and Capability prefers prepared providers before falling back to software acquisition\n- add the prepared `AbilityProvider` registry and adapters for Capability sets, MCP, OpenAPI, and application-specific connectors\n- add centralized authority/approval gating plus standardized receipts for prepared-provider execution\n- add `capability_need` as the first/default MCP bootstrap tool while retaining Forge, metabolism, composition, and substrate controls as advanced surfaces\n- add environment-expandable `capability.providers.json` loading for prepared MCP/OpenAPI providers\n- reposition software metabolism as the fallback that expands the ability space when ordinary integrations run out, without weakening the stable 1.x binder and artifact invariants\n\n'''
-          if text.startswith('# Changelog\n'):
-              text = heading + text[len('# Changelog\n\n'):]
-          elif '## 1.1.0' not in text:
-              text = heading + text
-          path.write_text(text)
+          if '## 1.1.0' not in text:
+              body = '''## 1.1.0\n\n- make `need()` the primary ability-first API: callers describe an outcome and Capability prefers prepared providers before falling back to software acquisition\n- add the prepared `AbilityProvider` registry and adapters for Capability sets, MCP, OpenAPI, and application-specific connectors\n- add centralized authority/approval gating plus standardized receipts for prepared-provider execution\n- add `capability_need` as the first/default MCP bootstrap tool while retaining Forge, metabolism, composition, and substrate controls as advanced surfaces\n- add environment-expandable `capability.providers.json` loading for prepared MCP/OpenAPI providers\n- reposition software metabolism as the fallback that expands the ability space when ordinary integrations run out, without weakening the stable 1.x binder and artifact invariants\n\n'''
+              marker = '# Changelog\n\n'
+              text = marker + body + text[len(marker):] if text.startswith(marker) else body + text
+              path.write_text(text)
           PY
       - name: Commit release metadata
         run: |
+          if git diff --quiet; then
+            exit 0
+          fi
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
           git add package.json package-lock.json .release CHANGELOG.md
