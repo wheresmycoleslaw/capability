@@ -1,6 +1,6 @@
 {
   "name": "@wheresmycoleslaw/capability",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "The stable Capability 1.x software-metabolism protocol and reference runtime for agents to discover, bind, authorize, isolate, compose, and acquire abilities from existing software.",
   "type": "module",
   "main": "./dist/index.js",

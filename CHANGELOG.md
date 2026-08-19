@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.1.0
+
+- make `need()` the primary ability-first API: callers describe an outcome and Capability prefers prepared providers before falling back to software acquisition
+- add the prepared `AbilityProvider` registry and adapters for Capability sets, MCP, OpenAPI, and application-specific connectors
+- add centralized authority/approval gating plus standardized receipts for prepared-provider execution
+- add `capability_need` as the first/default MCP bootstrap tool while retaining Forge, metabolism, composition, and substrate controls as advanced surfaces
+- add environment-expandable `capability.providers.json` loading for prepared MCP/OpenAPI providers
+- reposition software metabolism as the fallback that expands the ability space when ordinary integrations run out, without weakening the stable 1.x binder and artifact invariants
+
 ## 1.0.0
 
 - declare the Capability 1.x public compatibility line and publish an explicit stability contract instead of treating 1.0 as a cosmetic package-version milestone
