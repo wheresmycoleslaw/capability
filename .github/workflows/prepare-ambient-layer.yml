@@ -1,0 +1,61 @@
+name: Prepare ambient agent layer
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  prepare:
+    if: github.head_ref == 'feature/ambient-agent-layer'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/ambient-agent-layer
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Expose ambient API and make it the primary integration model
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs');
+          const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+          pkg.exports['./ambient'] = {
+            types: './dist/ambient.d.ts',
+            import: './dist/ambient.js'
+          };
+          if (!pkg.files.includes('AMBIENT.md')) pkg.files.push('AMBIENT.md');
+          for (const keyword of ['ambient-agents', 'missing-ability', 'agent-fallback']) {
+            if (!pkg.keywords.includes(keyword)) pkg.keywords.push(keyword);
+          }
+          fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n');
+          NODE
+          python3 <<'PY'
+          from pathlib import Path
+          p = Path('README.md')
+          text = p.read_text()
+          anchor = 'The caller should not need a second architecture when its normal tool catalog runs out.\n'
+          section = '''\n## Ambient mode: connect once, then get out of the way\n\nCapability can run as an agent-internal missing-ability layer. The end user asks for an outcome; the host agent uses its normal tools first and calls Capability only when a required ability is missing. Successful discovery and low-risk execution stay in the background. Consequential authority is surfaced for explicit approval.\n\n```ts\nimport { createAmbientCapabilityLayer } from "@wheresmycoleslaw/capability";\n\nconst capability = createAmbientCapabilityLayer({ providers });\nconst fallback = await capability.resolveMissing("the ability the agent is missing", { input });\n\n// fallback.visibility === "silent" for normal resolution/execution\n// fallback.state === "approval_required" when the user must authorize an effect\n```\n\nThis is deliberately a fallback primitive, not a command the end user should have to learn. See [`AMBIENT.md`](./AMBIENT.md).\n'''
+          if '## Ambient mode: connect once, then get out of the way' not in text:
+              assert anchor in text
+              text = text.replace(anchor, anchor + section, 1)
+          p.write_text(text)
+          PY
+      - name: Verify package
+        run: |
+          npm install --ignore-scripts
+          npm test
+          npm pack --dry-run
+      - name: Commit verified ambient packaging and docs
+        run: |
+          rm .github/workflows/prepare-ambient-layer.yml
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add package.json README.md .github/workflows/prepare-ambient-layer.yml
+          git commit -m 'Expose ambient layer as first-class package API'
+          git push origin HEAD:feature/ambient-agent-layer
