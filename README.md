@@ -6,6 +6,22 @@
 
 The caller should not need a second architecture when its normal tool catalog runs out.
 
+## Ambient mode: connect once, then get out of the way
+
+Capability can run as an agent-internal missing-ability layer. The end user asks for an outcome; the host agent uses its normal tools first and calls Capability only when a required ability is missing. Successful discovery and low-risk execution stay in the background. Consequential authority is surfaced for explicit approval.
+
+```ts
+import { createAmbientCapabilityLayer } from "@wheresmycoleslaw/capability";
+
+const capability = createAmbientCapabilityLayer({ providers });
+const fallback = await capability.resolveMissing("the ability the agent is missing", { input });
+
+// fallback.visibility === "silent" for normal resolution/execution
+// fallback.state === "approval_required" when the user must authorize an effect
+```
+
+This is deliberately a fallback primitive, not a command the end user should have to learn. See [`AMBIENT.md`](./AMBIENT.md).
+
 ```text
                          NEED
                           |
