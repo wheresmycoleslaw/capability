@@ -43,3 +43,4 @@ export * from "./conformance.js";
 export * from "./need.js";
 export * from "./providers.js";
 export * from "./builtin-provider.js";
+export * from "./ambient.js";

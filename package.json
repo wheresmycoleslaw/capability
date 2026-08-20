@@ -121,6 +121,10 @@
     "./conformance": {
       "types": "./dist/conformance.d.ts",
       "import": "./dist/conformance.js"
+    },
+    "./ambient": {
+      "types": "./dist/ambient.d.ts",
+      "import": "./dist/ambient.js"
     }
   },
   "files": [
@@ -149,7 +153,8 @@
     "stability-lock.json",
     "metabolic-binding.schema.json",
     "metabolic-execution-receipt.schema.json",
-    "capability-receipt.schema.json"
+    "capability-receipt.schema.json",
+    "AMBIENT.md"
   ],
   "sideEffects": false,
   "scripts": {
@@ -203,7 +208,10 @@
     "container-tools",
     "capability-composition",
     "capability-gap",
-    "universal-software"
+    "universal-software",
+    "ambient-agents",
+    "missing-ability",
+    "agent-fallback"
   ],
   "license": "MIT",
   "repository": {
