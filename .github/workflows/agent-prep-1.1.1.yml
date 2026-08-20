@@ -1,16 +1,17 @@
-name: Agent prepare Capability 1.1.1
+name: Prepare Capability 1.1.1
 
 on:
   push:
     branches:
       - release/1.1.1-resolution-fix
+    paths:
+      - .github/workflows/agent-prep-1.1.1.yml
 
 permissions:
   contents: write
 
 jobs:
   prepare:
-    if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -21,15 +22,14 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 24
-      - name: Prepare 1.1.1 metadata
+      - name: Bump package and release marker
         run: |
           npm version 1.1.1 --no-git-tag-version
           node <<'NODE'
           const fs = require('node:fs');
-          const path = 'package.json';
-          const pkg = JSON.parse(fs.readFileSync(path, 'utf8'));
+          const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
           pkg.description = 'An ability-resolution and governed execution layer for AI agents: use prepared providers first, then resolve abilities from the broader software world.';
-          fs.writeFileSync(path, JSON.stringify(pkg, null, 2) + '\n');
+          fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n');
           NODE
           printf '1.1.1\n' > .release
           npm run registry
@@ -38,7 +38,6 @@ jobs:
           path = Path('CHANGELOG.md')
           text = path.read_text()
           heading = '# Changelog\n\n'
-          assert text.startswith(heading)
           entry = '''## 1.1.1
 
 - fix `need()` so discovery-only requests resolve across prepared providers, the Capability index, npm, and GitHub without requiring Forge/materialization to succeed first
@@ -49,7 +48,9 @@ jobs:
 - add deterministic and live-network regression coverage across unrelated software needs
 
 '''
-          path.write_text(heading + entry + text[len(heading):])
+          if '## 1.1.1\n' not in text:
+              assert text.startswith(heading)
+              path.write_text(heading + entry + text[len(heading):])
           PY
       - name: Verify release candidate
         run: |
@@ -58,11 +59,12 @@ jobs:
           npm run conformance
           npm run registry:validate
           npm pack --dry-run
-      - name: Commit verified release candidate
+      - name: Commit release metadata
         run: |
-          rm .github/workflows/agent-prep-1.1.1.yml .release-prep-trigger
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -- package.json package-lock.json registry/index.json .release CHANGELOG.md .github/workflows/agent-prep-1.1.1.yml .release-prep-trigger
-          git commit -m "Release Capability 1.1.1"
+          rm -f .github/workflows/agent-prep-1.1.1.yml .github/workflows/agent-prep-1.1.1-pr.yml .release-prep-trigger .release-prep-trigger-2 .release-prep-trigger-3
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add -- package.json package-lock.json registry/index.json .release CHANGELOG.md
+          git add -u -- .github/workflows/agent-prep-1.1.1.yml .github/workflows/agent-prep-1.1.1-pr.yml .release-prep-trigger .release-prep-trigger-2 .release-prep-trigger-3
+          git commit -m 'Release Capability 1.1.1'
           git push origin HEAD:release/1.1.1-resolution-fix
