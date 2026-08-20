@@ -27,7 +27,9 @@ jobs:
           start = text.index("          node <<'NODE'\n") + len("          node <<'NODE'\n")
           end = text.index("\n          NODE\n", start)
           lines = text[start:end].splitlines()
-          Path('/tmp/apply-resolution-fix.cjs').write_text('\n'.join(line[10:] if line.startswith('          ') else line for line in lines) + '\n')
+          script = '\n'.join(line[10:] if line.startswith('          ') else line for line in lines) + '\n'
+          script = script.replace('throw new Error(`unexpected URL: ${url}`);', 'throw new Error("unexpected URL: " + url);')
+          Path('/tmp/apply-resolution-fix.cjs').write_text(script)
           PY
           node /tmp/apply-resolution-fix.cjs
       - name: Install and verify
