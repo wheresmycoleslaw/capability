@@ -21,6 +21,7 @@ jobs:
       - run: npm run build
       - name: Resolve unrelated natural-language needs against the live software world
         run: |
+          # This is intentionally a live network smoke, separate from deterministic unit coverage.
           node --input-type=module <<'NODE'
           import assert from 'node:assert/strict';
           import { need } from './dist/need.js';
