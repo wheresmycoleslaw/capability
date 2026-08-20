@@ -5,9 +5,84 @@ on:
   pull_request:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
+  release-prep-1-2-0:
+    if: github.event_name == 'pull_request' && github.head_ref == 'release/1.2.0-ambient'
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: release/1.2.0-ambient
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Prepare release metadata if needed
+        run: |
+          CURRENT=$(node -p "require('./package.json').version")
+          RELEASE=$(cat .release)
+          if [ "$CURRENT" = "1.2.0" ] && [ "$RELEASE" = "1.2.0" ]; then
+            echo "Capability 1.2.0 release metadata already prepared"
+            exit 0
+          fi
+          npm version 1.2.0 --no-git-tag-version
+          node <<'NODE'
+          const fs = require('node:fs');
+          const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+          pkg.description = 'An ambient missing-ability and governed execution layer for AI agents: use prepared abilities first, then resolve the wider software world.';
+          fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n');
+          NODE
+          printf '1.2.0\n' > .release
+          npm run registry
+          python3 <<'PY'
+          from pathlib import Path
+          p = Path('CHANGELOG.md')
+          text = p.read_text()
+          heading = '# Changelog\n\n'
+          entry = '''## 1.2.0
+
+- add the ambient agent integration layer: `AmbientCapabilityLayer`, `createAmbientCapabilityLayer()`, and `resolveMissingAbility()`
+- make missing-ability resolution a host-agent fallback primitive instead of a user-facing workflow
+- keep successful discovery and low-risk authorized execution silent while surfacing consequential approval boundaries as structured control flow
+- prevent ambient mode from treating arbitrary external software discovery as permission for silent execution
+- export `AMBIENT_AGENT_INSTRUCTIONS` for MCP/framework integrations and publish the `./ambient` package entry point
+- document the connect-once, use-normal-tools-first integration model and add regression coverage for execution, approval, discovery-only, and external-software boundaries
+
+'''
+          if '## 1.2.0\n' not in text:
+              assert text.startswith(heading)
+              p.write_text(heading + entry + text[len(heading):])
+          PY
+          rm -f .release-1.2.0-trigger .release-run-trigger
+      - name: Verify release candidate
+        run: |
+          npm install --ignore-scripts
+          npm test
+          npm run conformance
+          npm run registry:validate
+          npm pack --dry-run
+      - name: Commit prepared metadata and restore standard CI
+        run: |
+          CURRENT=$(node -p "require('./package.json').version")
+          RELEASE=$(cat .release)
+          if [ "$CURRENT" != "1.2.0" ] || [ "$RELEASE" != "1.2.0" ]; then
+            echo "Release metadata was not prepared" >&2
+            exit 1
+          fi
+          git show origin/main:.github/workflows/ci.yml > .github/workflows/ci.yml
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add -A
+          if git diff --cached --quiet; then
+            echo "No release-prep commit required"
+            exit 0
+          fi
+          git commit -m 'Release Capability 1.2.0 ambient agent layer'
+          git push origin HEAD:release/1.2.0-ambient
+
   test:
     strategy:
       fail-fast: false
