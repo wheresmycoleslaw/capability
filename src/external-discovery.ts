@@ -231,23 +231,178 @@ export async function searchGitHubSoftware(query: string, options: ExternalDisco
   return results;
 }
 
-export async function discoverExternalSoftware(query: string, options: ExternalDiscoveryOptions = {}): Promise<{ results: readonly ExternalSoftwareCandidate[]; errors: readonly ExternalDiscoveryError[] }> {
-  const tasks: Array<{ source: ExternalSoftwareSource; promise: Promise<ExternalSoftwareCandidate[]> }> = [];
-  if (options.npm !== false) tasks.push({ source: "npm", promise: searchNpmSoftware(query, options) });
-  if (options.github !== false) tasks.push({ source: "github", promise: searchGitHubSoftware(query, options) });
-  const settled = await Promise.allSettled(tasks.map((task) => task.promise));
-  const results: ExternalSoftwareCandidate[] = [];
-  const errors: ExternalDiscoveryError[] = [];
-  for (const [index, outcome] of settled.entries()) {
-    const source = tasks[index]?.source;
-    if (!source) continue;
-    if (outcome.status === "fulfilled") results.push(...outcome.value);
-    else errors.push({ source, message: outcome.reason instanceof Error ? outcome.reason.message : String(outcome.reason) });
+const EXTERNAL_QUERY_STOPWORDS = new Set([
+  "a", "an", "the", "to", "of", "for", "in", "on", "at", "by", "with", "and", "or", "from", "into",
+  "this", "that", "my", "your", "its", "please", "use", "using", "find", "need", "needs", "ability", "abilities",
+  "tool", "tools", "something", "way", "can", "could", "would", "should"
+]);
+
+const EXTERNAL_GENERIC_TERMS = new Set([
+  "convert", "transform", "parse", "extract", "generate", "create", "make", "build", "format", "normalize",
+  "read", "write", "load", "save", "handle", "process", "text", "string", "strings", "file", "files", "document",
+  "documents", "record", "records", "value", "values", "input", "output", "content"
+]);
+
+const INDIRECT_PACKAGE_TERMS = new Set([
+  "plugin", "adapter", "middleware", "loader", "contrib", "eslint", "babel", "webpack", "gulp", "grunt", "koa",
+  "express", "react", "vue", "angular", "node-red"
+]);
+
+function discoveryTokens(value: string): string[] {
+  return value.toLowerCase().split(/[^a-z0-9]+/g).filter((token) => token.length > 1 && !EXTERNAL_QUERY_STOPWORDS.has(token));
+}
+
+function subjectTokens(value: string): string[] {
+  const content = discoveryTokens(value);
+  const focused = content.filter((token) => !EXTERNAL_GENERIC_TERMS.has(token));
+  return focused.length ? focused : content;
+}
+
+function normalizedKey(value: string): string {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, "");
+}
+
+/** Build bounded focused search expressions from a natural-language outcome. */
+export function planExternalSearchQueries(query: string, maxQueries = 8): string[] {
+  const raw = query.trim().replace(/\s+/g, " ");
+  if (!raw) return [];
+  const content = discoveryTokens(raw);
+  const subject = subjectTokens(raw);
+  const variants: string[] = [];
+  const add = (value: string) => { if (value.trim()) variants.push(value.trim()); };
+
+  add(subject.join(" "));
+  if (subject.length > 1) {
+    add(subject.join(""));
+    add(subject.join("-"));
   }
-  return {
-    results: results.sort((a, b) => b.score - a.score || a.source.localeCompare(b.source) || a.name.localeCompare(b.name)),
-    errors
-  };
+  for (let size = Math.min(3, subject.length); size >= 2; size--) {
+    for (let i = 0; i <= subject.length - size; i++) {
+      const slice = subject.slice(i, i + size);
+      add(slice.join(" "));
+      add(slice.join(""));
+    }
+  }
+  if (subject.length === 1) add(subject[0]!);
+  add(content.join(" "));
+  add(raw);
+
+  const seen = new Set<string>();
+  const planned: string[] = [];
+  for (const variant of variants) {
+    const normalized = variant.trim().replace(/\s+/g, " ");
+    if (normalized.length < 2) continue;
+    const key = normalized.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    planned.push(normalized);
+    if (planned.length >= Math.max(1, maxQueries)) break;
+  }
+  return planned;
+}
+
+function relevanceScore(intent: string, candidate: ExternalSoftwareCandidate, queryIndex: number, queryCount: number): number {
+  const subject = subjectTokens(intent);
+  const allIntentTokens = discoveryTokens(intent);
+  const name = candidate.name.toLowerCase();
+  const description = candidate.description.toLowerCase();
+  const nameKey = normalizedKey(candidate.name);
+  const subjectKey = normalizedKey(subject.join(" "));
+
+  const subjectInName = subject.filter((token) => name.includes(token)).length;
+  const subjectInDescription = subject.filter((token) => description.includes(token)).length;
+  const intentInDescription = allIntentTokens.filter((token) => description.includes(token)).length;
+  const nameCoverage = subject.length ? subjectInName / subject.length : 0;
+  const descriptionCoverage = subject.length ? subjectInDescription / subject.length : 0;
+  const intentCoverage = allIntentTokens.length ? intentInDescription / allIntentTokens.length : 0;
+
+  let nameAffinity = nameCoverage;
+  if (subjectKey && nameKey === subjectKey) nameAffinity = 1;
+  else if (subjectKey && (nameKey.includes(subjectKey) || subjectKey.includes(nameKey))) nameAffinity = Math.max(nameAffinity, 0.82);
+
+  const rank = 1 / Math.max(1, candidate.sourceRank);
+  const popularity = candidate.popularity && candidate.popularity > 0 ? Math.min(1, Math.log10(candidate.popularity + 1) / 5) : 0;
+  const focusWeight = queryCount > 1 ? 1 - (queryIndex / (queryCount - 1)) * 0.08 : 1;
+  const intentMentionsIndirect = allIntentTokens.some((token) => INDIRECT_PACKAGE_TERMS.has(token));
+  const candidateTokens = new Set(candidate.name.toLowerCase().split(/[^a-z0-9]+/g).filter(Boolean));
+  const indirect = !intentMentionsIndirect && [...candidateTokens].some((token) => INDIRECT_PACKAGE_TERMS.has(token));
+  const indirectPenalty = indirect ? 0.22 : 0;
+
+  const score = (
+    nameAffinity * 0.34 +
+    descriptionCoverage * 0.24 +
+    intentCoverage * 0.14 +
+    rank * 0.20 +
+    popularity * 0.08
+  ) * focusWeight - indirectPenalty;
+  return Math.max(0, Math.min(1, score));
+}
+
+export async function discoverExternalSoftware(query: string, options: ExternalDiscoveryOptions = {}): Promise<{ results: readonly ExternalSoftwareCandidate[]; errors: readonly ExternalDiscoveryError[] }> {
+  const queries = planExternalSearchQueries(query);
+  if (!queries.length) return { results: [], errors: [] };
+
+  const timeoutSignal = options.signal ?? (typeof AbortSignal !== "undefined" && typeof AbortSignal.timeout === "function" ? AbortSignal.timeout(10_000) : undefined);
+  const taskOptions: ExternalDiscoveryOptions = timeoutSignal ? { ...options, signal: timeoutSignal } : options;
+  const tasks: Array<{ source: ExternalSoftwareSource; query: string; queryIndex: number; promise: Promise<ExternalSoftwareCandidate[]> }> = [];
+
+  if (options.npm !== false) {
+    for (const [queryIndex, searchQuery] of queries.entries()) {
+      tasks.push({ source: "npm", query: searchQuery, queryIndex, promise: searchNpmSoftware(searchQuery, taskOptions) });
+    }
+  }
+
+  if (options.github !== false) {
+    const token = options.githubToken ?? (typeof process !== "undefined" ? process.env.GITHUB_TOKEN : undefined);
+    // GitHub's anonymous search quota is intentionally conserved. npm carries the broad query
+    // fan-out; GitHub gets the most specific expression unless authenticated.
+    const githubQueries = token ? queries.slice(-Math.min(3, queries.length)) : [queries[queries.length - 1]!];
+    for (const searchQuery of githubQueries) {
+      const queryIndex = queries.indexOf(searchQuery);
+      tasks.push({ source: "github", query: searchQuery, queryIndex: queryIndex < 0 ? queries.length - 1 : queryIndex, promise: searchGitHubSoftware(searchQuery, taskOptions) });
+    }
+  }
+
+  const settled = await Promise.allSettled(tasks.map((task) => task.promise));
+  const merged = new Map<string, ExternalSoftwareCandidate & { hits: number }>();
+  const errors: ExternalDiscoveryError[] = [];
+
+  for (const [index, outcome] of settled.entries()) {
+    const task = tasks[index];
+    if (!task) continue;
+    if (outcome.status === "rejected") {
+      errors.push({ source: task.source, message: `[${task.query}] ${outcome.reason instanceof Error ? outcome.reason.message : String(outcome.reason)}` });
+      continue;
+    }
+    for (const candidate of outcome.value) {
+      const key = `${candidate.source}:${candidate.locator}`;
+      const scored = relevanceScore(query, candidate, task.queryIndex, queries.length);
+      const previous = merged.get(key);
+      if (!previous) {
+        merged.set(key, {
+          ...candidate,
+          score: scored,
+          signals: [...new Set([...candidate.signals, `query:${task.query}`])],
+          hits: 1
+        });
+        continue;
+      }
+      const hits = previous.hits + 1;
+      merged.set(key, {
+        ...previous,
+        score: Math.min(1, Math.max(previous.score, scored) + Math.min(0.12, (hits - 1) * 0.025)),
+        signals: [...new Set([...previous.signals, ...candidate.signals, `query:${task.query}`])],
+        adoption: [...new Map([...previous.adoption, ...candidate.adoption].map((entry) => [`${entry.method}:${entry.reason}`, entry])).values()],
+        hits
+      });
+    }
+  }
+
+  const results = [...merged.values()]
+    .map(({ hits: _hits, ...candidate }) => candidate)
+    .sort((a, b) => b.score - a.score || a.source.localeCompare(b.source) || a.name.localeCompare(b.name));
+
+  return { results, errors };
 }
 
 export async function discoverSoftwareWorld(query: string, options: SoftwareWorldDiscoveryOptions = {}): Promise<SoftwareWorldDiscovery> {
