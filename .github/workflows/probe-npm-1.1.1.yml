@@ -1,0 +1,18 @@
+name: Probe published Capability 1.1.1
+
+on:
+  push:
+    branches:
+      - probe/npm-1.1.1
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: npm view @wheresmycoleslaw/capability@1.1.1 version dist.integrity dist.tarball --json
