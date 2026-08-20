@@ -32,6 +32,22 @@ jobs:
           Path('/tmp/apply-resolution-fix.cjs').write_text(script)
           PY
           node /tmp/apply-resolution-fix.cjs
+          python3 <<'PY'
+          from pathlib import Path
+          path = Path('src/need.ts')
+          text = path.read_text()
+          old = 'capabilities: readonly Capability[];'
+          if old not in text:
+              raise SystemExit('providerFromCapabilities Capability type marker missing')
+          path.write_text(text.replace(old, 'capabilities: readonly Capability<any, any>[];', 1))
+
+          path = Path('src/builtin-provider.ts')
+          text = path.read_text()
+          old = 'export const builtinCapabilities: readonly Capability[] = Object.freeze(['
+          if old not in text:
+              raise SystemExit('builtinCapabilities type marker missing')
+          path.write_text(text.replace(old, 'export const builtinCapabilities: readonly Capability<any, any>[] = Object.freeze([', 1))
+          PY
       - name: Install and verify
         run: |
           npm install --ignore-scripts
