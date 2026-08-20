@@ -5,6 +5,8 @@ import { CapabilityError } from "./errors.js";
 import { sha256 } from "./utils.js";
 import type { Capability, CapabilityEffect, JsonValue } from "./types.js";
 import { createCapabilityGap, metabolizeIntent, type MetabolicSubstrate } from "./metabolism.js";
+import { discoverSoftwareWorld, type ExternalSoftwareCandidate, type NativeSoftwareResult } from "./external-discovery.js";
+import { assessNativeIntentFit } from "./forge.js";
 
 export type AbilitySourceKind = "native" | "connector" | "mcp" | "openapi" | "npm" | "pypi" | "oci" | "repository" | "composition" | "gap";
 
@@ -18,6 +20,8 @@ export type AbilityCandidate = {
   score?: number;
   effects?: readonly CapabilityEffect[];
   authorityComplete?: boolean;
+  /** Whether the selected ability can execute immediately without a materialization/acquisition step. */
+  executionReady?: boolean;
   metadata?: Record<string, JsonValue>;
 };
 
@@ -94,10 +98,13 @@ export type NeedOptions = Omit<AbilityProviderContext, "intent"> & {
   ociArgs?: string[];
   externalOnly?: boolean;
   allowUnverifiedSource?: boolean;
+  fetch?: typeof fetch;
+  githubToken?: string;
 };
 
+const NEED_STOPWORDS = new Set(["a", "an", "the", "to", "of", "for", "in", "on", "at", "by", "with", "and", "or", "from", "into", "this", "that", "my", "your", "its", "please", "use", "using", "need", "needs", "ability", "abilities", "tool", "tools"]);
 function tokens(value: string): string[] {
-  return value.toLowerCase().split(/[^a-z0-9]+/).filter((part) => part.length > 1);
+  return value.toLowerCase().split(/[^a-z0-9]+/).filter((part) => part.length > 1 && !NEED_STOPWORDS.has(part));
 }
 
 function lexicalScore(intent: string, capability: Capability): number {
@@ -141,7 +148,7 @@ export function providerFromCapabilities(options: {
   kind: Exclude<AbilitySourceKind, "gap">;
   priority?: number;
   description: string;
-  capabilities: readonly Capability[];
+  capabilities: readonly Capability<any, any>[];
   trusted?: boolean;
 }): AbilityProvider {
   const byId = new Map(options.capabilities.map((capability) => [capability.manifest.id, capability]));
@@ -164,10 +171,11 @@ export function providerFromCapabilities(options: {
             score: lexicalScore(intent, capability),
             effects: manifest.effects ?? [],
             authorityComplete: true,
+            executionReady: true,
             metadata: { version: manifest.version }
           } satisfies AbilityCandidate;
         })
-        .filter((candidate) => (candidate.score ?? 0) > 0)
+        .filter((candidate) => (candidate.score ?? 0) >= 0.6)
         .sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
     },
     async execute(candidate, context) {
@@ -177,6 +185,51 @@ export function providerFromCapabilities(options: {
       const input = context.input === undefined ? {} : context.input;
       const receipt = await runtime.invoke(candidate.id, input, { approved: context.approved ?? false });
       return { output: receipt.output, receipt };
+    }
+  };
+}
+
+function indexedAbilityCandidate(entry: NativeSoftwareResult): AbilityCandidate {
+  return {
+    kind: "native",
+    id: entry.id,
+    name: entry.name,
+    description: entry.description,
+    ready: true,
+    executionReady: true,
+    trusted: true,
+    score: entry.score,
+    effects: [...entry.effects] as CapabilityEffect[],
+    authorityComplete: true,
+    metadata: { package: entry.package, stage: "indexed", reasons: [...entry.reasons] }
+  };
+}
+
+function externalAbilityCandidate(entry: ExternalSoftwareCandidate): AbilityCandidate {
+  return {
+    kind: entry.source === "npm" ? "npm" : "repository",
+    id: entry.locator,
+    name: entry.name,
+    description: entry.description,
+    ready: true,
+    executionReady: false,
+    trusted: false,
+    score: entry.score,
+    effects: ["custom:external.opaque-effects"],
+    authorityComplete: false,
+    metadata: {
+      stage: "discovered",
+      source: entry.source,
+      locator: entry.locator,
+      sourceRank: entry.sourceRank,
+      signals: [...entry.signals],
+      adoption: entry.adoption.map((hint) => ({ method: hint.method, confidence: hint.confidence, reason: hint.reason })),
+      ...(entry.version ? { version: entry.version } : {}),
+      ...(entry.repository ? { repository: entry.repository } : {}),
+      ...(entry.homepage ? { homepage: entry.homepage } : {}),
+      ...(entry.language ? { language: entry.language } : {}),
+      ...(entry.license ? { license: entry.license } : {}),
+      ...(entry.popularity !== undefined ? { popularity: entry.popularity } : {})
     }
   };
 }
@@ -210,7 +263,16 @@ export async function need(intent: string, options: NeedOptions = {}): Promise<N
       .sort((a, b) => Number(Boolean(b.trusted)) - Number(Boolean(a.trusted)) || (b.score ?? 0) - (a.score ?? 0))[0];
     considered.push({ provider: provider.id, kind: provider.kind, candidates: candidates.length });
     if (!ready) continue;
-    if (options.execute && provider.execute) {
+    if (options.execute) {
+      if (!provider.execute) {
+        considered[considered.length - 1] = {
+          provider: provider.id,
+          kind: provider.kind,
+          candidates: candidates.length,
+          detail: "selected candidate is not executable by this provider; continuing resolution"
+        };
+        continue;
+      }
       const approved = options.approved ?? false;
       const effects = authorizeProviderCandidate(ready, approved);
       const startedAt = new Date().toISOString();
@@ -244,6 +306,71 @@ export async function need(intent: string, options: NeedOptions = {}): Promise<N
       };
     }
     return { intent, status: "ready", provider: provider.id, source: provider.kind, candidate: ready, considered };
+  }
+
+  // A non-executing need is a resolution request, not permission to build arbitrary software.
+  // Search the whole software world first and return the best honest candidate without forcing Forge.
+  if (!options.execute) {
+    try {
+      const discovery = await discoverSoftwareWorld(intent, {
+        ...(options.indexes ? { indexes: options.indexes } : {}),
+        includeNative: options.externalOnly !== true,
+        includeExternal: true,
+        limit: 12,
+        ...(options.fetch ? { fetch: options.fetch } : {}),
+        ...(options.githubToken ? { githubToken: options.githubToken } : {})
+      });
+
+      if (options.externalOnly !== true) {
+        considered.push({ provider: "capability/index", kind: "native", candidates: discovery.native.length });
+        const native = discovery.native
+          .map((candidate) => ({ candidate, fit: assessNativeIntentFit(intent, candidate) }))
+          .find((entry) => entry.fit.accepted);
+        if (native) {
+          return {
+            intent,
+            status: "ready",
+            provider: "capability/index",
+            source: "native",
+            candidate: indexedAbilityCandidate(native.candidate),
+            considered
+          };
+        }
+      }
+
+      const npm = discovery.external.filter((candidate) => candidate.source === "npm");
+      const repositories = discovery.external.filter((candidate) => candidate.source === "github");
+      considered.push({ provider: "capability/npm", kind: "npm", candidates: npm.length });
+      considered.push({ provider: "capability/github", kind: "repository", candidates: repositories.length });
+      const external = discovery.external[0];
+      if (external) {
+        const candidate = externalAbilityCandidate(external);
+        return {
+          intent,
+          status: "ready",
+          provider: "capability/software-world",
+          source: candidate.kind,
+          candidate,
+          result: {
+            stage: "discovered",
+            executionReady: false,
+            candidate,
+            errors: discovery.errors
+          },
+          considered
+        };
+      }
+      if (discovery.errors.length) {
+        considered.push({
+          provider: "capability/discovery",
+          kind: "gap",
+          candidates: 0,
+          detail: discovery.errors.map((error) => `${error.source}: ${error.message}`).join(" | ")
+        });
+      }
+    } catch (error) {
+      considered.push({ provider: "capability/discovery", kind: "gap", candidates: 0, detail: error instanceof Error ? error.message : String(error) });
+    }
   }
 
   const fallback = await metabolizeIntent(intent, {

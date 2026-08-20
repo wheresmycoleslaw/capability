@@ -231,23 +231,118 @@ export async function searchGitHubSoftware(query: string, options: ExternalDisco
   return results;
 }
 
-export async function discoverExternalSoftware(query: string, options: ExternalDiscoveryOptions = {}): Promise<{ results: readonly ExternalSoftwareCandidate[]; errors: readonly ExternalDiscoveryError[] }> {
-  const tasks: Array<{ source: ExternalSoftwareSource; promise: Promise<ExternalSoftwareCandidate[]> }> = [];
-  if (options.npm !== false) tasks.push({ source: "npm", promise: searchNpmSoftware(query, options) });
-  if (options.github !== false) tasks.push({ source: "github", promise: searchGitHubSoftware(query, options) });
-  const settled = await Promise.allSettled(tasks.map((task) => task.promise));
-  const results: ExternalSoftwareCandidate[] = [];
-  const errors: ExternalDiscoveryError[] = [];
-  for (const [index, outcome] of settled.entries()) {
-    const source = tasks[index]?.source;
-    if (!source) continue;
-    if (outcome.status === "fulfilled") results.push(...outcome.value);
-    else errors.push({ source, message: outcome.reason instanceof Error ? outcome.reason.message : String(outcome.reason) });
+const EXTERNAL_QUERY_STOPWORDS = new Set([
+  "a", "an", "the", "to", "of", "for", "in", "on", "at", "by", "with", "and", "or", "from", "into",
+  "this", "that", "my", "your", "its", "please", "use", "using", "find", "need", "needs", "ability", "abilities",
+  "tool", "tools", "something", "way", "can", "could", "would", "should"
+]);
+
+function discoveryTokens(value: string): string[] {
+  return value.toLowerCase().split(/[^a-z0-9]+/g).filter((token) => token.length > 1 && !EXTERNAL_QUERY_STOPWORDS.has(token));
+}
+
+/** Build a small, deterministic set of search expressions from a natural-language outcome. */
+export function planExternalSearchQueries(query: string, maxQueries = 5): string[] {
+  const raw = query.trim().replace(/\s+/g, " ");
+  if (!raw) return [];
+  const content = discoveryTokens(raw);
+  const variants = [
+    raw,
+    content.join(" "),
+    content.slice(-4).join(" "),
+    content.slice(-3).join(" "),
+    content.slice(-2).join(" ")
+  ];
+  const seen = new Set<string>();
+  const planned: string[] = [];
+  for (const variant of variants) {
+    const normalized = variant.trim().replace(/\s+/g, " ");
+    if (normalized.length < 2) continue;
+    const key = normalized.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    planned.push(normalized);
+    if (planned.length >= Math.max(1, maxQueries)) break;
   }
-  return {
-    results: results.sort((a, b) => b.score - a.score || a.source.localeCompare(b.source) || a.name.localeCompare(b.name)),
-    errors
-  };
+  return planned;
+}
+
+function relevanceScore(intent: string, candidate: ExternalSoftwareCandidate, queryIndex: number, queryCount: number): number {
+  const intentTokens = discoveryTokens(intent);
+  const haystack = [candidate.name, candidate.description, ...candidate.signals].join(" ").toLowerCase();
+  const matched = intentTokens.filter((token) => haystack.includes(token));
+  const coverage = intentTokens.length ? matched.length / intentTokens.length : 0;
+  const rank = 1 / Math.max(1, candidate.sourceRank);
+  const queryWeight = queryCount > 1 ? 1 - (queryIndex / (queryCount - 1)) * 0.08 : 1;
+  const popularity = candidate.popularity && candidate.popularity > 0 ? Math.min(1, Math.log10(candidate.popularity + 1) / 5) : 0;
+  return (rank * 0.5 + coverage * 0.4 + popularity * 0.1) * queryWeight;
+}
+
+export async function discoverExternalSoftware(query: string, options: ExternalDiscoveryOptions = {}): Promise<{ results: readonly ExternalSoftwareCandidate[]; errors: readonly ExternalDiscoveryError[] }> {
+  const queries = planExternalSearchQueries(query);
+  if (!queries.length) return { results: [], errors: [] };
+
+  const timeoutSignal = options.signal ?? (typeof AbortSignal !== "undefined" && typeof AbortSignal.timeout === "function" ? AbortSignal.timeout(10_000) : undefined);
+  const taskOptions: ExternalDiscoveryOptions = timeoutSignal ? { ...options, signal: timeoutSignal } : options;
+  const tasks: Array<{ source: ExternalSoftwareSource; query: string; queryIndex: number; promise: Promise<ExternalSoftwareCandidate[]> }> = [];
+
+  if (options.npm !== false) {
+    for (const [queryIndex, searchQuery] of queries.entries()) {
+      tasks.push({ source: "npm", query: searchQuery, queryIndex, promise: searchNpmSoftware(searchQuery, taskOptions) });
+    }
+  }
+
+  if (options.github !== false) {
+    const token = options.githubToken ?? (typeof process !== "undefined" ? process.env.GITHUB_TOKEN : undefined);
+    // GitHub's anonymous search quota is intentionally conserved. npm carries the broad query
+    // fan-out; GitHub gets the most specific expression unless authenticated.
+    const githubQueries = token ? queries.slice(-Math.min(3, queries.length)) : [queries[queries.length - 1]!];
+    for (const searchQuery of githubQueries) {
+      const queryIndex = queries.indexOf(searchQuery);
+      tasks.push({ source: "github", query: searchQuery, queryIndex: queryIndex < 0 ? queries.length - 1 : queryIndex, promise: searchGitHubSoftware(searchQuery, taskOptions) });
+    }
+  }
+
+  const settled = await Promise.allSettled(tasks.map((task) => task.promise));
+  const merged = new Map<string, ExternalSoftwareCandidate & { hits: number }>();
+  const errors: ExternalDiscoveryError[] = [];
+
+  for (const [index, outcome] of settled.entries()) {
+    const task = tasks[index];
+    if (!task) continue;
+    if (outcome.status === "rejected") {
+      errors.push({ source: task.source, message: `[${task.query}] ${outcome.reason instanceof Error ? outcome.reason.message : String(outcome.reason)}` });
+      continue;
+    }
+    for (const candidate of outcome.value) {
+      const key = `${candidate.source}:${candidate.locator}`;
+      const scored = relevanceScore(query, candidate, task.queryIndex, queries.length);
+      const previous = merged.get(key);
+      if (!previous) {
+        merged.set(key, {
+          ...candidate,
+          score: scored,
+          signals: [...new Set([...candidate.signals, `query:${task.query}`])],
+          hits: 1
+        });
+        continue;
+      }
+      const hits = previous.hits + 1;
+      merged.set(key, {
+        ...previous,
+        score: Math.max(previous.score, scored) + Math.min(0.18, hits * 0.03),
+        signals: [...new Set([...previous.signals, ...candidate.signals, `query:${task.query}`])],
+        adoption: [...new Map([...previous.adoption, ...candidate.adoption].map((entry) => [`${entry.method}:${entry.reason}`, entry])).values()],
+        hits
+      });
+    }
+  }
+
+  const results = [...merged.values()]
+    .map(({ hits: _hits, ...candidate }) => candidate)
+    .sort((a, b) => b.score - a.score || a.source.localeCompare(b.source) || a.name.localeCompare(b.name));
+
+  return { results, errors };
 }
 
 export async function discoverSoftwareWorld(query: string, options: SoftwareWorldDiscoveryOptions = {}): Promise<SoftwareWorldDiscovery> {

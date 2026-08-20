@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { AbilityProviderRegistry, defineAbilityProvider, providerFromCapabilities, need } from "../dist/need.js";
 import { defineCapability } from "../dist/define.js";
+import { createBuiltinProvider } from "../dist/builtin-provider.js";
 
 test("need prefers a prepared provider before software-world fallback", async () => {
   const provider = defineAbilityProvider({
@@ -114,4 +115,48 @@ test("unknown prepared-provider authority requires approval by default", async (
     () => need("opaque action", { providers, execute: true }),
     (error) => error?.code === "APPROVAL_REQUIRED"
   );
+});
+
+
+test("need resolves natural-language external software without forcing Forge", async () => {
+  const fetch = async (url) => {
+    const parsed = new URL(String(url));
+    if (parsed.hostname === "registry.npmjs.org") {
+      const query = parsed.searchParams.get("text") ?? "";
+      return new Response(JSON.stringify({ objects: query.toLowerCase() === "camel case" ? [{ package: { name: "camelcase", version: "9.0.0", description: "Convert strings to camel case", keywords: ["camelcase"], links: { repository: "https://github.com/sindresorhus/camelcase" } } }] : [] }), { status: 200, headers: { "content-type": "application/json" } });
+    }
+    if (parsed.hostname === "api.github.com") return new Response(JSON.stringify({ items: [] }), { status: 200, headers: { "content-type": "application/json" } });
+    throw new Error(`unexpected URL: ${url}`);
+  };
+  const resolution = await need("convert separated text to camel case", { externalOnly: true, fetch });
+  assert.equal(resolution.status, "ready");
+  assert.equal(resolution.source, "npm");
+  assert.equal(resolution.candidate?.id, "npm:camelcase@9.0.0");
+  assert.equal(resolution.candidate?.executionReady, false);
+  assert.equal(resolution.candidate?.authorityComplete, false);
+});
+
+test("built-in provider is a prepared fast path and executes pure abilities", async () => {
+  const providers = new AbilityProviderRegistry().register(createBuiltinProvider());
+  const resolution = await need("slugify text", { providers, execute: true, input: { text: "Hello Capability World" } });
+  assert.equal(resolution.status, "executed");
+  assert.deepEqual(resolution.result, { slug: "hello-capability-world" });
+  assert.equal(resolution.provider, "capability/builtins");
+});
+
+test("execute continues past a provider that can discover but cannot execute", async () => {
+  const providers = new AbilityProviderRegistry()
+    .register(defineAbilityProvider({
+      id: "discover-only", kind: "connector", priority: 1, description: "Discovery only",
+      async discover() { return [{ kind: "connector", id: "mail/send", ready: true, trusted: true, score: 1, effects: [], authorityComplete: true }]; }
+    }))
+    .register(defineAbilityProvider({
+      id: "executable", kind: "connector", priority: 2, description: "Executable",
+      async discover() { return [{ kind: "connector", id: "mail/send", ready: true, trusted: true, score: 1, effects: [], authorityComplete: true }]; },
+      async execute() { return { output: { sent: true } }; }
+    }));
+  const resolution = await need("send mail", { providers, execute: true });
+  assert.equal(resolution.status, "executed");
+  assert.equal(resolution.provider, "executable");
+  assert.equal(resolution.considered[0]?.detail, "selected candidate is not executable by this provider; continuing resolution");
 });
