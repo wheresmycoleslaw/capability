@@ -1,16 +1,16 @@
 name: Prepare Capability 1.2.0 release
 
 on:
-  push:
+  pull_request:
     branches: [main]
-    paths:
-      - .github/workflows/agent-release-1.2.0.yml
+    types: [opened, synchronize, reopened]
 
 permissions:
   contents: write
 
 jobs:
   prepare:
+    if: github.head_ref == 'release/1.2.0-ambient'
     runs-on: ubuntu-latest
     timeout-minutes: 12
     steps:
