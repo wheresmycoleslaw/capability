@@ -25,7 +25,7 @@ Capability ambient fallback
              +--> no candidate         --> return an honest gap
 ```
 
-The end user should normally ask for the outcome they want, not for Capability itself.
+The end user should normally ask for the outcome they want, not for Capability itself. Capability is infrastructure for the agent's missing-ability path.
 
 ## SDK
 
