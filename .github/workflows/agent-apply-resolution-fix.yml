@@ -1,0 +1,136 @@
+name: Agent apply software-world resolver fix
+
+on:
+  push:
+    branches:
+      - fix/resolve-whole-software-world
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/resolve-whole-software-world
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Apply resolver architecture fix
+        run: |
+          node <<'NODE'
+          const { readFileSync, writeFileSync, unlinkSync } = require('node:fs');
+
+          function replaceOnce(path, from, to) {
+            const source = readFileSync(path, 'utf8');
+            if (!source.includes(from)) throw new Error(`Expected text not found in ${path}: ${from.slice(0, 100)}`);
+            const next = source.replace(from, to);
+            if (next === source) throw new Error(`Replacement did not change ${path}`);
+            writeFileSync(path, next);
+          }
+
+          // 1) Make external discovery robust to natural-language requests instead of sending
+          // one sentence verbatim to npm/GitHub and treating search phrasing as capability truth.
+          {
+            const path = 'src/external-discovery.ts';
+            let source = readFileSync(path, 'utf8');
+            const marker = 'export async function discoverExternalSoftware(query: string, options: ExternalDiscoveryOptions = {}): Promise<{ results: readonly ExternalSoftwareCandidate[]; errors: readonly ExternalDiscoveryError[] }> {';
+            if (!source.includes(marker)) throw new Error('discoverExternalSoftware marker missing');
+            const start = source.indexOf(marker);
+            const nextMarker = '\n\nexport async function discoverSoftwareWorld';
+            const end = source.indexOf(nextMarker, start);
+            if (end < 0) throw new Error('discoverSoftwareWorld marker missing');
+            const planner = `const EXTERNAL_QUERY_STOPWORDS = new Set([\n  "a", "an", "the", "to", "of", "for", "in", "on", "at", "by", "with", "and", "or", "from", "into",\n  "this", "that", "my", "your", "its", "please", "use", "using", "find", "need", "needs", "ability", "abilities",\n  "tool", "tools", "something", "way", "can", "could", "would", "should"\n]);\n\nfunction discoveryTokens(value: string): string[] {\n  return value.toLowerCase().split(/[^a-z0-9]+/g).filter((token) => token.length > 1 && !EXTERNAL_QUERY_STOPWORDS.has(token));\n}\n\n/** Build a small, deterministic set of search expressions from a natural-language outcome. */\nexport function planExternalSearchQueries(query: string, maxQueries = 5): string[] {\n  const raw = query.trim().replace(/\\s+/g, " ");\n  if (!raw) return [];\n  const content = discoveryTokens(raw);\n  const variants = [\n    raw,\n    content.join(" "),\n    content.slice(-4).join(" "),\n    content.slice(-3).join(" "),\n    content.slice(-2).join(" ")\n  ];\n  const seen = new Set<string>();\n  const planned: string[] = [];\n  for (const variant of variants) {\n    const normalized = variant.trim().replace(/\\s+/g, " ");\n    if (normalized.length < 2) continue;\n    const key = normalized.toLowerCase();\n    if (seen.has(key)) continue;\n    seen.add(key);\n    planned.push(normalized);\n    if (planned.length >= Math.max(1, maxQueries)) break;\n  }\n  return planned;\n}\n\nfunction relevanceScore(intent: string, candidate: ExternalSoftwareCandidate, queryIndex: number, queryCount: number): number {\n  const intentTokens = discoveryTokens(intent);\n  const haystack = [candidate.name, candidate.description, ...candidate.signals].join(" ").toLowerCase();\n  const matched = intentTokens.filter((token) => haystack.includes(token));\n  const coverage = intentTokens.length ? matched.length / intentTokens.length : 0;\n  const rank = 1 / Math.max(1, candidate.sourceRank);\n  const queryWeight = queryCount > 1 ? 1 - (queryIndex / (queryCount - 1)) * 0.08 : 1;\n  const popularity = candidate.popularity && candidate.popularity > 0 ? Math.min(1, Math.log10(candidate.popularity + 1) / 5) : 0;\n  return (rank * 0.5 + coverage * 0.4 + popularity * 0.1) * queryWeight;\n}\n\n`;
+            const replacement = `export async function discoverExternalSoftware(query: string, options: ExternalDiscoveryOptions = {}): Promise<{ results: readonly ExternalSoftwareCandidate[]; errors: readonly ExternalDiscoveryError[] }> {\n  const queries = planExternalSearchQueries(query);\n  if (!queries.length) return { results: [], errors: [] };\n\n  const timeoutSignal = options.signal ?? (typeof AbortSignal !== "undefined" && typeof AbortSignal.timeout === "function" ? AbortSignal.timeout(10_000) : undefined);\n  const taskOptions: ExternalDiscoveryOptions = timeoutSignal ? { ...options, signal: timeoutSignal } : options;\n  const tasks: Array<{ source: ExternalSoftwareSource; query: string; queryIndex: number; promise: Promise<ExternalSoftwareCandidate[]> }> = [];\n\n  if (options.npm !== false) {\n    for (const [queryIndex, searchQuery] of queries.entries()) {\n      tasks.push({ source: "npm", query: searchQuery, queryIndex, promise: searchNpmSoftware(searchQuery, taskOptions) });\n    }\n  }\n\n  if (options.github !== false) {\n    const token = options.githubToken ?? (typeof process !== "undefined" ? process.env.GITHUB_TOKEN : undefined);\n    // GitHub's anonymous search quota is intentionally conserved. npm carries the broad query\n    // fan-out; GitHub gets the most specific expression unless authenticated.\n    const githubQueries = token ? queries.slice(-Math.min(3, queries.length)) : [queries[queries.length - 1]!];\n    for (const searchQuery of githubQueries) {\n      const queryIndex = queries.indexOf(searchQuery);\n      tasks.push({ source: "github", query: searchQuery, queryIndex: queryIndex < 0 ? queries.length - 1 : queryIndex, promise: searchGitHubSoftware(searchQuery, taskOptions) });\n    }\n  }\n\n  const settled = await Promise.allSettled(tasks.map((task) => task.promise));\n  const merged = new Map<string, ExternalSoftwareCandidate & { hits: number }>();\n  const errors: ExternalDiscoveryError[] = [];\n\n  for (const [index, outcome] of settled.entries()) {\n    const task = tasks[index];\n    if (!task) continue;\n    if (outcome.status === "rejected") {\n      errors.push({ source: task.source, message: \`[\${task.query}] \${outcome.reason instanceof Error ? outcome.reason.message : String(outcome.reason)}\` });\n      continue;\n    }\n    for (const candidate of outcome.value) {\n      const key = \`\${candidate.source}:\${candidate.locator}\`;\n      const scored = relevanceScore(query, candidate, task.queryIndex, queries.length);\n      const previous = merged.get(key);\n      if (!previous) {\n        merged.set(key, {\n          ...candidate,\n          score: scored,\n          signals: [...new Set([...candidate.signals, \`query:\${task.query}\`])],\n          hits: 1\n        });\n        continue;\n      }\n      const hits = previous.hits + 1;\n      merged.set(key, {\n        ...previous,\n        score: Math.max(previous.score, scored) + Math.min(0.18, hits * 0.03),\n        signals: [...new Set([...previous.signals, ...candidate.signals, \`query:\${task.query}\`])],\n        adoption: [...new Map([...previous.adoption, ...candidate.adoption].map((entry) => [\`\${entry.method}:\${entry.reason}\`, entry])).values()],\n        hits\n      });\n    }\n  }\n\n  const results = [...merged.values()]\n    .map(({ hits: _hits, ...candidate }) => candidate)\n    .sort((a, b) => b.score - a.score || a.source.localeCompare(b.source) || a.name.localeCompare(b.name));\n\n  return { results, errors };\n}`;
+            source = source.slice(0, start) + planner + replacement + source.slice(end);
+            writeFileSync(path, source);
+          }
+
+          // 2) Make need() a true resolver: prepared providers first, then a fast software-world
+          // resolution pass, and only materialize/Forge when execution is actually requested.
+          {
+            const path = 'src/need.ts';
+            let source = readFileSync(path, 'utf8');
+            source = source.replace(
+              'import { createCapabilityGap, metabolizeIntent, type MetabolicSubstrate } from "./metabolism.js";\n',
+              'import { createCapabilityGap, metabolizeIntent, type MetabolicSubstrate } from "./metabolism.js";\nimport { discoverSoftwareWorld, type ExternalSoftwareCandidate, type NativeSoftwareResult } from "./external-discovery.js";\nimport { assessNativeIntentFit } from "./forge.js";\n'
+            );
+            source = source.replace(
+              '  authorityComplete?: boolean;\n  metadata?: Record<string, JsonValue>;\n',
+              '  authorityComplete?: boolean;\n  /** Whether the selected ability can execute immediately without a materialization/acquisition step. */\n  executionReady?: boolean;\n  metadata?: Record<string, JsonValue>;\n'
+            );
+            source = source.replace(
+              '  allowUnverifiedSource?: boolean;\n};\n\nfunction tokens(value: string): string[] {\n  return value.toLowerCase().split(/[^a-z0-9]+/).filter((part) => part.length > 1);\n}\n',
+              '  allowUnverifiedSource?: boolean;\n  fetch?: typeof fetch;\n  githubToken?: string;\n};\n\nconst NEED_STOPWORDS = new Set(["a", "an", "the", "to", "of", "for", "in", "on", "at", "by", "with", "and", "or", "from", "into", "this", "that", "my", "your", "its", "please", "use", "using", "need", "needs", "ability", "abilities", "tool", "tools"]);\nfunction tokens(value: string): string[] {\n  return value.toLowerCase().split(/[^a-z0-9]+/).filter((part) => part.length > 1 && !NEED_STOPWORDS.has(part));\n}\n'
+            );
+            source = source.replace(
+              '            authorityComplete: true,\n            metadata: { version: manifest.version }\n',
+              '            authorityComplete: true,\n            executionReady: true,\n            metadata: { version: manifest.version }\n'
+            );
+            source = source.replace(
+              '        .filter((candidate) => (candidate.score ?? 0) > 0)\n',
+              '        .filter((candidate) => (candidate.score ?? 0) >= 0.6)\n'
+            );
+
+            const providerBlockStart = '    if (options.execute && provider.execute) {';
+            const providerBlockEnd = '    return { intent, status: "ready", provider: provider.id, source: provider.kind, candidate: ready, considered };';
+            const pStart = source.indexOf(providerBlockStart);
+            const pEnd = source.indexOf(providerBlockEnd, pStart);
+            if (pStart < 0 || pEnd < 0) throw new Error('prepared provider execution block not found');
+            const pAfter = pEnd + providerBlockEnd.length;
+            const providerReplacement = `    if (options.execute) {\n      if (!provider.execute) {\n        considered[considered.length - 1] = {\n          provider: provider.id,\n          kind: provider.kind,\n          candidates: candidates.length,\n          detail: "selected candidate is not executable by this provider; continuing resolution"\n        };\n        continue;\n      }\n      const approved = options.approved ?? false;\n      const effects = authorizeProviderCandidate(ready, approved);\n      const startedAt = new Date().toISOString();\n      const result = await provider.execute(ready, context);\n      const endedAt = new Date().toISOString();\n      const record = result && typeof result === "object" && !Array.isArray(result) ? result as Record<string, unknown> : undefined;\n      const output = record?.output ?? result;\n      const receipt: PreparedProviderReceipt = {\n        receiptVersion: "0.1",\n        provider: { id: provider.id, kind: provider.kind },\n        ability: { id: ready.id, ...(ready.name ? { name: ready.name } : {}) },\n        status: "succeeded",\n        effects,\n        authorityComplete: ready.authorityComplete === true,\n        approved,\n        inputHash: sha256(context.input === undefined ? {} : context.input),\n        outputHash: sha256(output),\n        startedAt,\n        endedAt,\n        ...(record?.receipt !== undefined ? { upstreamReceipt: record.receipt } : {})\n      };\n      return {\n        intent,\n        status: "executed",\n        provider: provider.id,\n        source: provider.kind,\n        candidate: ready,\n        result: output,\n        receipt,\n        considered\n      };\n    }\n    return { intent, status: "ready", provider: provider.id, source: provider.kind, candidate: ready, considered };`;
+            source = source.slice(0, pStart) + providerReplacement + source.slice(pAfter);
+
+            const needMarker = '/**\n * Resolve an intent through the simplest production-ready provider first.';
+            const needPos = source.indexOf(needMarker);
+            if (needPos < 0) throw new Error('need() doc marker not found');
+            const helpers = `function indexedAbilityCandidate(entry: NativeSoftwareResult): AbilityCandidate {\n  return {\n    kind: "native",\n    id: entry.id,\n    name: entry.name,\n    description: entry.description,\n    ready: true,\n    executionReady: true,\n    trusted: true,\n    score: entry.score,\n    effects: [...entry.effects] as CapabilityEffect[],\n    authorityComplete: true,\n    metadata: { package: entry.package, stage: "indexed", reasons: [...entry.reasons] }\n  };\n}\n\nfunction externalAbilityCandidate(entry: ExternalSoftwareCandidate): AbilityCandidate {\n  return {\n    kind: entry.source === "npm" ? "npm" : "repository",\n    id: entry.locator,\n    name: entry.name,\n    description: entry.description,\n    ready: true,\n    executionReady: false,\n    trusted: false,\n    score: entry.score,\n    effects: ["custom:external.opaque-effects"],\n    authorityComplete: false,\n    metadata: {\n      stage: "discovered",\n      source: entry.source,\n      locator: entry.locator,\n      sourceRank: entry.sourceRank,\n      signals: [...entry.signals],\n      adoption: entry.adoption.map((hint) => ({ method: hint.method, confidence: hint.confidence, reason: hint.reason })),\n      ...(entry.version ? { version: entry.version } : {}),\n      ...(entry.repository ? { repository: entry.repository } : {}),\n      ...(entry.homepage ? { homepage: entry.homepage } : {}),\n      ...(entry.language ? { language: entry.language } : {}),\n      ...(entry.license ? { license: entry.license } : {}),\n      ...(entry.popularity !== undefined ? { popularity: entry.popularity } : {})\n    }\n  };\n}\n\n`;
+            source = source.slice(0, needPos) + helpers + source.slice(needPos);
+
+            const fallbackMarker = '  const fallback = await metabolizeIntent(intent, {';
+            const fPos = source.indexOf(fallbackMarker);
+            if (fPos < 0) throw new Error('metabolize fallback marker not found');
+            const resolutionPass = `  // A non-executing need is a resolution request, not permission to build arbitrary software.\n  // Search the whole software world first and return the best honest candidate without forcing Forge.\n  if (!options.execute) {\n    try {\n      const discovery = await discoverSoftwareWorld(intent, {\n        ...(options.indexes ? { indexes: options.indexes } : {}),\n        includeNative: options.externalOnly !== true,\n        includeExternal: true,\n        limit: 12,\n        ...(options.fetch ? { fetch: options.fetch } : {}),\n        ...(options.githubToken ? { githubToken: options.githubToken } : {})\n      });\n\n      if (options.externalOnly !== true) {\n        considered.push({ provider: "capability/index", kind: "native", candidates: discovery.native.length });\n        const native = discovery.native\n          .map((candidate) => ({ candidate, fit: assessNativeIntentFit(intent, candidate) }))\n          .find((entry) => entry.fit.accepted);\n        if (native) {\n          return {\n            intent,\n            status: "ready",\n            provider: "capability/index",\n            source: "native",\n            candidate: indexedAbilityCandidate(native.candidate),\n            considered\n          };\n        }\n      }\n\n      const npm = discovery.external.filter((candidate) => candidate.source === "npm");\n      const repositories = discovery.external.filter((candidate) => candidate.source === "github");\n      considered.push({ provider: "capability/npm", kind: "npm", candidates: npm.length });\n      considered.push({ provider: "capability/github", kind: "repository", candidates: repositories.length });\n      const external = discovery.external[0];\n      if (external) {\n        const candidate = externalAbilityCandidate(external);\n        return {\n          intent,\n          status: "ready",\n          provider: "capability/software-world",\n          source: candidate.kind,\n          candidate,\n          result: {\n            stage: "discovered",\n            executionReady: false,\n            candidate,\n            errors: discovery.errors\n          },\n          considered\n        };\n      }\n      if (discovery.errors.length) {\n        considered.push({\n          provider: "capability/discovery",\n          kind: "gap",\n          candidates: 0,\n          detail: discovery.errors.map((error) => \`\${error.source}: \${error.message}\`).join(" | ")\n        });\n      }\n    } catch (error) {\n      considered.push({ provider: "capability/discovery", kind: "gap", candidates: 0, detail: error instanceof Error ? error.message : String(error) });\n    }\n  }\n\n`;
+            source = source.slice(0, fPos) + resolutionPass + source.slice(fPos);
+            writeFileSync(path, source);
+          }
+
+          // 3) Make the package's own built-ins a normal preferred provider so cloud/serverless
+          // consumers don't have to rediscover or install what is already in the runtime.
+          writeFileSync('src/builtin-provider.ts', `import type { Capability } from "./types.js";\nimport { providerFromCapabilities, type AbilityProvider } from "./need.js";\nimport authorityEnvelope from "./builtins/capability-authority-envelope.js";\nimport contractEvolution from "./builtins/capability-contract-evolution.js";\nimport contractRouter from "./builtins/capability-contract-router.js";\nimport dominanceResolver from "./builtins/capability-dominance-resolver.js";\nimport failureFrontier from "./builtins/capability-failure-frontier.js";\nimport noveltyRadar from "./builtins/capability-novelty-radar.js";\nimport receiptDrift from "./builtins/capability-receipt-drift.js";\nimport substitutionCertificate from "./builtins/capability-substitution-certificate.js";\nimport dataSha256 from "./builtins/data-sha256.js";\nimport jsonGet from "./builtins/json-get.js";\nimport textNormalize from "./builtins/text-normalize.js";\nimport textSlugify from "./builtins/text-slugify.js";\n\nexport const builtinCapabilities: readonly Capability[] = Object.freeze([\n  textNormalize,\n  textSlugify,\n  dataSha256,\n  jsonGet,\n  authorityEnvelope,\n  contractEvolution,\n  contractRouter,\n  dominanceResolver,\n  failureFrontier,\n  noveltyRadar,\n  receiptDrift,\n  substitutionCertificate\n]);\n\nexport function createBuiltinProvider(options: { id?: string; priority?: number } = {}): AbilityProvider {\n  return providerFromCapabilities({\n    id: options.id ?? "capability/builtins",\n    kind: "native",\n    priority: options.priority ?? 0,\n    description: "Pure built-in Capability abilities shipped with the runtime",\n    capabilities: builtinCapabilities,\n    trusted: true\n  });\n}\n`);
+
+          replaceOnce('src/index.ts', 'export * from "./providers.js";\n', 'export * from "./providers.js";\nexport * from "./builtin-provider.js";\n');
+
+          // 4) Regression coverage: natural-language query expansion, honest external readiness,
+          // safe built-ins, and provider fail-through when execution isn't implemented.
+          writeFileSync('test/external-resolution.test.mjs', `import test from "node:test";\nimport assert from "node:assert/strict";\nimport { planExternalSearchQueries, discoverExternalSoftware } from "../dist/external-discovery.js";\n\nfunction json(body) {\n  return new Response(JSON.stringify(body), { status: 200, headers: { "content-type": "application/json" } });\n}\n\ntest("natural-language software discovery fans out into focused queries and merges results", async () => {\n  const calls = [];\n  const fetch = async (url) => {\n    calls.push(String(url));\n    const parsed = new URL(String(url));\n    if (parsed.hostname === "registry.npmjs.org") {\n      const query = parsed.searchParams.get("text") ?? "";\n      if (query.toLowerCase() === "camel case") {\n        return json({ objects: [{ package: { name: "camelcase", version: "9.0.0", description: "Convert a string to camel case", keywords: ["camelcase"], links: { repository: "https://github.com/sindresorhus/camelcase" } } }] });\n      }\n      return json({ objects: [] });\n    }\n    if (parsed.hostname === "api.github.com") return json({ items: [] });\n    throw new Error(`unexpected URL: ${url}`);\n  };\n\n  const planned = planExternalSearchQueries("convert separated text to camel case");\n  assert.ok(planned.includes("camel case"));\n  const result = await discoverExternalSoftware("convert separated text to camel case", { fetch });\n  assert.equal(result.results[0]?.name, "camelcase");\n  assert.equal(result.results[0]?.source, "npm");\n  assert.ok(calls.some((url) => url.includes("text=camel%20case")));\n});\n`);
+
+          // Append need() regression tests without weakening the existing suite.
+          {
+            const path = 'test/need.test.mjs';
+            let source = readFileSync(path, 'utf8');
+            if (!source.includes('createBuiltinProvider')) {
+              source = source.replace(
+                'import { defineCapability } from "../dist/define.js";\n',
+                'import { defineCapability } from "../dist/define.js";\nimport { createBuiltinProvider } from "../dist/builtin-provider.js";\n'
+              );
+              source += `\n\ntest("need resolves natural-language external software without forcing Forge", async () => {\n  const fetch = async (url) => {\n    const parsed = new URL(String(url));\n    if (parsed.hostname === "registry.npmjs.org") {\n      const query = parsed.searchParams.get("text") ?? "";\n      return new Response(JSON.stringify({ objects: query.toLowerCase() === "camel case" ? [{ package: { name: "camelcase", version: "9.0.0", description: "Convert strings to camel case", keywords: ["camelcase"], links: { repository: "https://github.com/sindresorhus/camelcase" } } }] : [] }), { status: 200, headers: { "content-type": "application/json" } });\n    }\n    if (parsed.hostname === "api.github.com") return new Response(JSON.stringify({ items: [] }), { status: 200, headers: { "content-type": "application/json" } });\n    throw new Error(\`unexpected URL: \${url}\`);\n  };\n  const resolution = await need("convert separated text to camel case", { externalOnly: true, fetch });\n  assert.equal(resolution.status, "ready");\n  assert.equal(resolution.source, "npm");\n  assert.equal(resolution.candidate?.id, "npm:camelcase@9.0.0");\n  assert.equal(resolution.candidate?.executionReady, false);\n  assert.equal(resolution.candidate?.authorityComplete, false);\n});\n\ntest("built-in provider is a prepared fast path and executes pure abilities", async () => {\n  const providers = new AbilityProviderRegistry().register(createBuiltinProvider());\n  const resolution = await need("slugify text", { providers, execute: true, input: { text: "Hello Capability World" } });\n  assert.equal(resolution.status, "executed");\n  assert.deepEqual(resolution.result, { slug: "hello-capability-world" });\n  assert.equal(resolution.provider, "capability/builtins");\n});\n\ntest("execute continues past a provider that can discover but cannot execute", async () => {\n  const providers = new AbilityProviderRegistry()\n    .register(defineAbilityProvider({\n      id: "discover-only", kind: "connector", priority: 1, description: "Discovery only",\n      async discover() { return [{ kind: "connector", id: "mail/send", ready: true, trusted: true, score: 1, effects: [], authorityComplete: true }]; }\n    }))\n    .register(defineAbilityProvider({\n      id: "executable", kind: "connector", priority: 2, description: "Executable",\n      async discover() { return [{ kind: "connector", id: "mail/send", ready: true, trusted: true, score: 1, effects: [], authorityComplete: true }]; },\n      async execute() { return { output: { sent: true } }; }\n    }));\n  const resolution = await need("send mail", { providers, execute: true });\n  assert.equal(resolution.status, "executed");\n  assert.equal(resolution.provider, "executable");\n  assert.equal(resolution.considered[0]?.detail, "selected candidate is not executable by this provider; continuing resolution");\n});\n`;
+              writeFileSync(path, source);
+            }
+          }
+          NODE
+      - name: Install dependencies
+        run: npm install --ignore-scripts
+      - name: Verify package
+        run: npm test
+      - name: Commit verified fix and remove one-shot workflow
+        run: |
+          rm .github/workflows/agent-apply-resolution-fix.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -- src/external-discovery.ts src/need.ts src/builtin-provider.ts src/index.ts test/external-resolution.test.mjs test/need.test.mjs .github/workflows/agent-apply-resolution-fix.yml
+          git commit -m "Fix ability resolution across the software world"
+          git push origin HEAD:fix/resolve-whole-software-world
