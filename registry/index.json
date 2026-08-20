@@ -1,6 +1,6 @@
 {
   "indexVersion": "0.1",
-  "generatedAt": "2026-08-19T19:23:35.702Z",
+  "generatedAt": "2026-08-20T04:32:50.508Z",
   "metadata": {
     "name": "Capability Public Registry",
     "maintainer": "wheresmycoleslaw",
@@ -10,7 +10,7 @@
   "packages": [
     {
       "name": "@wheresmycoleslaw/capability",
-      "version": "1.1.0",
+      "version": "1.1.1",
       "source": "npm",
       "repository": "https://github.com/wheresmycoleslaw/capability",
       "capabilities": [

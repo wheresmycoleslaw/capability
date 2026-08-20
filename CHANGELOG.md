@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.1.1
+
+- fix `need()` so discovery-only requests resolve across prepared providers, the Capability index, npm, and GitHub without requiring Forge/materialization to succeed first
+- turn natural-language outcomes into bounded focused software searches and rank direct utilities ahead of framework/plugin near-misses
+- expose the runtime pure built-in abilities as a first-class prepared provider for cloud and serverless consumers
+- make execution continue past discovery-only providers rather than returning a misleading ready result
+- preserve external software as explicitly non-execution-ready and authority-incomplete until it is acquired/materialized in an appropriate execution environment
+- add deterministic and live-network regression coverage across unrelated software needs
+
 ## 1.1.0
 
 - make `need()` the primary ability-first API: callers describe an outcome and Capability prefers prepared providers before falling back to software acquisition
