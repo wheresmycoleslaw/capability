@@ -1,0 +1,107 @@
+name: Verify v1 contract after 1.1.1
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+      - run: npm install --global npm@11
+      - name: Install exact 1.0.0 release
+        run: |
+          rm -rf /tmp/capability-v1-consumer /tmp/cap-v1-adopter
+          mkdir /tmp/capability-v1-consumer
+          cd /tmp/capability-v1-consumer
+          npm init -y >/dev/null
+          npm install --ignore-scripts @wheresmycoleslaw/capability@1.0.0
+      - name: Prove published protocol contract
+        working-directory: /tmp/capability-v1-consumer
+        run: |
+          node --input-type=module <<'NODE'
+          import {
+            METABOLIC_BINDING_VERSION,
+            MetabolicBinderRegistry,
+            capabilityProtocolInfo,
+            runBinderConformance,
+            runProtocolConformance
+          } from '@wheresmycoleslaw/capability';
+          import { runProtocolConformance as runFromExport } from '@wheresmycoleslaw/capability/conformance';
+          import { capabilityProtocolInfo as infoFromExport } from '@wheresmycoleslaw/capability/protocol';
+
+          const info = capabilityProtocolInfo();
+          if (info.protocolVersion !== '1.0' || info.stabilityLine !== '1.x') throw new Error(JSON.stringify(info));
+          if (infoFromExport().protocolVersion !== '1.0') throw new Error('protocol export mismatch');
+          for (const run of [runProtocolConformance, runFromExport]) {
+            const report = await run();
+            if (!report.ok) throw new Error(JSON.stringify(report, null, 2));
+          }
+
+          const artifact = 'sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc';
+          const binder = {
+            id: 'released-clean-room/digest-command',
+            substrate: 'released-clean-room',
+            discovery: 'explicit',
+            description: 'Clean-room binder compiled only against the published Capability 1.x extension contract.',
+            async bind({ locator }) {
+              return {
+                bindingVersion: METABOLIC_BINDING_VERSION,
+                binderId: this.id,
+                substrate: this.substrate,
+                locator,
+                immutableArtifact: artifact,
+                createdAt: new Date().toISOString(),
+                authority: { complete: false, effects: ['custom:external.opaque-effects'] },
+                evidence: [artifact]
+              };
+            },
+            async execute(_binding, input) {
+              return {
+                status: 'succeeded',
+                output: input,
+                isolation: 'released-clean-room-boundary',
+                upstreamReceipt: { proof: 'published-1.0.0' }
+              };
+            }
+          };
+
+          const conformance = await runBinderConformance(
+            binder,
+            { locator: 'clean-room:latest' },
+            { executeInput: { value: 'capability-1.0' }, approved: true }
+          );
+          if (!conformance.ok) throw new Error(JSON.stringify(conformance, null, 2));
+
+          const registry = new MetabolicBinderRegistry().register(binder);
+          const binding = await registry.bind(binder.id, { locator: 'clean-room:latest' });
+          let refused = false;
+          try { await registry.execute(binder.id, binding, { value: 'must-refuse' }); }
+          catch (error) { refused = /explicit approval/.test(String(error)); }
+          if (!refused) throw new Error('published registry allowed incomplete authority without explicit approval');
+
+          const execution = await registry.execute(binder.id, binding, { value: 'capability-1.0' }, { approved: true });
+          if (execution.status !== 'succeeded') throw new Error(JSON.stringify(execution, null, 2));
+          if (execution.receipt.receiptVersion !== '1.0') throw new Error('wrong metabolic receipt version');
+          if (execution.receipt.immutableArtifact !== artifact) throw new Error('published receipt lost immutable artifact identity');
+          if (execution.receipt.authority.complete !== false) throw new Error('published receipt lost authority incompleteness');
+          if (!execution.receipt.evidence.includes(artifact)) throw new Error('published receipt lost evidence');
+          if (execution.receipt.isolation !== 'released-clean-room-boundary') throw new Error('published receipt lost isolation boundary');
+          NODE
+      - name: Prove released CLI scaffolding
+        run: |
+          CAP=/tmp/capability-v1-consumer/node_modules/.bin/cap
+          test -x "$CAP"
+          "$CAP" create /tmp/cap-v1-adopter --name cap-v1-adopter --id proof/run --description "Capability 1.0 released-package adopter proof."
+          grep -q '"@wheresmycoleslaw/capability": "\^1.0.0"' /tmp/cap-v1-adopter/package.json
+          "$CAP" readiness /tmp/cap-v1-adopter/package.json > /tmp/cap-v1-readiness.json
+          grep -q '"ok": true' /tmp/cap-v1-readiness.json
