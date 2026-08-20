@@ -1,0 +1,45 @@
+name: Live resolver smoke
+
+on:
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  live-resolution:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: npm install --ignore-scripts
+      - run: npm run build
+      - name: Resolve unrelated natural-language needs against the live software world
+        run: |
+          node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+          import { need } from './dist/need.js';
+
+          const intents = [
+            'convert separated text to camel case',
+            'parse a CSV string into records',
+            'extract text from a PDF',
+            'generate a UUID',
+            'convert Markdown to HTML'
+          ];
+
+          const results = await Promise.all(intents.map((intent) => need(intent)));
+          for (const [index, resolution] of results.entries()) {
+            const intent = intents[index];
+            assert.equal(resolution.status, 'ready', `${intent}: expected ready, got ${resolution.status}`);
+            assert.ok(resolution.candidate, `${intent}: missing candidate`);
+            assert.notEqual(resolution.candidate.id, 'text/normalize', `${intent}: weak text/normalize false positive`);
+            assert.notEqual(resolution.source, 'gap', `${intent}: resolved to a gap`);
+            console.log(JSON.stringify({ intent, source: resolution.source, candidate: resolution.candidate.id, score: resolution.candidate.score, executionReady: resolution.candidate.executionReady }));
+          }
+          NODE
