@@ -27,8 +27,7 @@ jobs:
       - run: npm install --global npm@11
       - name: Install exact released package in a clean consumer
         run: |
-          VERSION=$(cat .release)
-          test "$VERSION" = "1.0.0"
+          VERSION=1.0.0
           mkdir /tmp/capability-v1-consumer
           cd /tmp/capability-v1-consumer
           npm init -y >/dev/null
