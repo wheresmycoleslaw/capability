@@ -237,22 +237,56 @@ const EXTERNAL_QUERY_STOPWORDS = new Set([
   "tool", "tools", "something", "way", "can", "could", "would", "should"
 ]);
 
+const EXTERNAL_GENERIC_TERMS = new Set([
+  "convert", "transform", "parse", "extract", "generate", "create", "make", "build", "format", "normalize",
+  "read", "write", "load", "save", "handle", "process", "text", "string", "strings", "file", "files", "document",
+  "documents", "record", "records", "value", "values", "input", "output", "content"
+]);
+
+const INDIRECT_PACKAGE_TERMS = new Set([
+  "plugin", "adapter", "middleware", "loader", "contrib", "eslint", "babel", "webpack", "gulp", "grunt", "koa",
+  "express", "react", "vue", "angular", "node-red"
+]);
+
 function discoveryTokens(value: string): string[] {
   return value.toLowerCase().split(/[^a-z0-9]+/g).filter((token) => token.length > 1 && !EXTERNAL_QUERY_STOPWORDS.has(token));
 }
 
-/** Build a small, deterministic set of search expressions from a natural-language outcome. */
-export function planExternalSearchQueries(query: string, maxQueries = 5): string[] {
+function subjectTokens(value: string): string[] {
+  const content = discoveryTokens(value);
+  const focused = content.filter((token) => !EXTERNAL_GENERIC_TERMS.has(token));
+  return focused.length ? focused : content;
+}
+
+function normalizedKey(value: string): string {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, "");
+}
+
+/** Build bounded focused search expressions from a natural-language outcome. */
+export function planExternalSearchQueries(query: string, maxQueries = 8): string[] {
   const raw = query.trim().replace(/\s+/g, " ");
   if (!raw) return [];
   const content = discoveryTokens(raw);
-  const variants = [
-    raw,
-    content.join(" "),
-    content.slice(-4).join(" "),
-    content.slice(-3).join(" "),
-    content.slice(-2).join(" ")
-  ];
+  const subject = subjectTokens(raw);
+  const variants: string[] = [];
+  const add = (value: string) => { if (value.trim()) variants.push(value.trim()); };
+
+  add(subject.join(" "));
+  if (subject.length > 1) {
+    add(subject.join(""));
+    add(subject.join("-"));
+  }
+  for (let size = Math.min(3, subject.length); size >= 2; size--) {
+    for (let i = 0; i <= subject.length - size; i++) {
+      const slice = subject.slice(i, i + size);
+      add(slice.join(" "));
+      add(slice.join(""));
+    }
+  }
+  if (subject.length === 1) add(subject[0]!);
+  add(content.join(" "));
+  add(raw);
+
   const seen = new Set<string>();
   const planned: string[] = [];
   for (const variant of variants) {
@@ -268,14 +302,40 @@ export function planExternalSearchQueries(query: string, maxQueries = 5): string
 }
 
 function relevanceScore(intent: string, candidate: ExternalSoftwareCandidate, queryIndex: number, queryCount: number): number {
-  const intentTokens = discoveryTokens(intent);
-  const haystack = [candidate.name, candidate.description, ...candidate.signals].join(" ").toLowerCase();
-  const matched = intentTokens.filter((token) => haystack.includes(token));
-  const coverage = intentTokens.length ? matched.length / intentTokens.length : 0;
+  const subject = subjectTokens(intent);
+  const allIntentTokens = discoveryTokens(intent);
+  const name = candidate.name.toLowerCase();
+  const description = candidate.description.toLowerCase();
+  const nameKey = normalizedKey(candidate.name);
+  const subjectKey = normalizedKey(subject.join(" "));
+
+  const subjectInName = subject.filter((token) => name.includes(token)).length;
+  const subjectInDescription = subject.filter((token) => description.includes(token)).length;
+  const intentInDescription = allIntentTokens.filter((token) => description.includes(token)).length;
+  const nameCoverage = subject.length ? subjectInName / subject.length : 0;
+  const descriptionCoverage = subject.length ? subjectInDescription / subject.length : 0;
+  const intentCoverage = allIntentTokens.length ? intentInDescription / allIntentTokens.length : 0;
+
+  let nameAffinity = nameCoverage;
+  if (subjectKey && nameKey === subjectKey) nameAffinity = 1;
+  else if (subjectKey && (nameKey.includes(subjectKey) || subjectKey.includes(nameKey))) nameAffinity = Math.max(nameAffinity, 0.82);
+
   const rank = 1 / Math.max(1, candidate.sourceRank);
-  const queryWeight = queryCount > 1 ? 1 - (queryIndex / (queryCount - 1)) * 0.08 : 1;
   const popularity = candidate.popularity && candidate.popularity > 0 ? Math.min(1, Math.log10(candidate.popularity + 1) / 5) : 0;
-  return (rank * 0.5 + coverage * 0.4 + popularity * 0.1) * queryWeight;
+  const focusWeight = queryCount > 1 ? 1 - (queryIndex / (queryCount - 1)) * 0.08 : 1;
+  const intentMentionsIndirect = allIntentTokens.some((token) => INDIRECT_PACKAGE_TERMS.has(token));
+  const candidateTokens = new Set(candidate.name.toLowerCase().split(/[^a-z0-9]+/g).filter(Boolean));
+  const indirect = !intentMentionsIndirect && [...candidateTokens].some((token) => INDIRECT_PACKAGE_TERMS.has(token));
+  const indirectPenalty = indirect ? 0.22 : 0;
+
+  const score = (
+    nameAffinity * 0.34 +
+    descriptionCoverage * 0.24 +
+    intentCoverage * 0.14 +
+    rank * 0.20 +
+    popularity * 0.08
+  ) * focusWeight - indirectPenalty;
+  return Math.max(0, Math.min(1, score));
 }
 
 export async function discoverExternalSoftware(query: string, options: ExternalDiscoveryOptions = {}): Promise<{ results: readonly ExternalSoftwareCandidate[]; errors: readonly ExternalDiscoveryError[] }> {
@@ -330,7 +390,7 @@ export async function discoverExternalSoftware(query: string, options: ExternalD
       const hits = previous.hits + 1;
       merged.set(key, {
         ...previous,
-        score: Math.max(previous.score, scored) + Math.min(0.18, hits * 0.03),
+        score: Math.min(1, Math.max(previous.score, scored) + Math.min(0.12, (hits - 1) * 0.025)),
         signals: [...new Set([...previous.signals, ...candidate.signals, `query:${task.query}`])],
         adoption: [...new Map([...previous.adoption, ...candidate.adoption].map((entry) => [`${entry.method}:${entry.reason}`, entry])).values()],
         hits
